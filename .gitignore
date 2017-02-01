@@ -1,0 +1,9 @@
+build
+test
+.imdone
+doc
+snippet_dump.txt
+run
+util/depend.d
+util/sh.sh
+core.*
