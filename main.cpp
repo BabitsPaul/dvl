@@ -1,12 +1,16 @@
-#include "meta.hpp"
+#include "parser.hpp"
 
 #include <iostream>
+#include <cstdio>
 
 int main(int argc, char *argv[])
 {
-	int tmp1 = dvl::msum<int, 0, 3, 2>();
+	dvl::pid id(0);
 
-	std::cout << tmp1 << std::endl;
+	id.set_type(7);
+
+	//std::cout << id.get_type() << std::endl;
+	printf("%x\n", id.get_type());
 
 	return 0;
 }

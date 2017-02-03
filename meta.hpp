@@ -23,52 +23,62 @@ namespace dvl
 	// variadic parameters
 	//
 
-	template<typename T, unsigned int index, T t, T... v>
-	T mgetparam_h()
+	template<typename T>
+	inline
+	constexpr T
+	mgetparam_h(unsigned int)
 	{
-		return (index == 0 ? t : mgetparam_h<T, index - 1, v...>());
+		throw "Invalid index";
 	}
 
-	template<typename T, unsigned int index, T... t>
-	T mgetparam()
+	template<typename T, T t, T... v>
+	inline
+	constexpr T
+	mgetparam_h(unsigned int index)
 	{
-		static_assert(sizeof...(t) > index, "Index out of range");
+		return (index == 0 ? t : mgetparam_h<T, v...>(index - 1));
+	}
 
-		return mgetparam_h<T, index, t...>();
+	template<typename T, T... t>
+	constexpr T
+	mgetparam(unsigned int index)
+	{
+		return mgetparam_h<T, t...>(index);
 	}
 
 	////////////////////////////////////////////////////////////////////////////
 	// sum
 	//
 
-	template<typename T, unsigned int count>
-	inline
-	constexpr T msum_h()
+	template<typename T>
+	constexpr T
+	msum_h_err()
 	{
-		static_assert(count >= 0, "Invalid count");
-
-		return 0;
+		throw "Invalid parameter number";
 	}
 
-	template<typename T, unsigned int count, T t, T... v>
+	template<typename T>
 	inline
-	constexpr T msum_h()
+	constexpr T msum_h(unsigned int count)
 	{
-		return (count == 0 ? 0 : t + msum_h<T, count - 1, v...>());
+		//static_assert(count >= 0, "Invalid count");
+
+		return (count == 0 ? 0 : msum_h_err<T>());
+	}
+
+	template<typename T, T t, T... v>
+	inline
+	constexpr T msum_h(unsigned int count)
+	{
+		return (count == 0 ? 0 : t + msum_h<T, v...>(count - 1));
 	}
 
 	// sums up count values from t
-	template<typename T, unsigned int count, T... t>
-	constexpr T msum()
+	template<typename T, T... t>
+	constexpr T msum(unsigned int count)
 	{
-		return msum_h<T, count, t...>();
+		return msum_h<T, t...>(count);
 	}
-
-	////////////////////////////////////////////////////////////////////////////
-	// mask
-	//
-
-	
 }
 
 #endif //_META_H_
