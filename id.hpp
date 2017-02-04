@@ -46,7 +46,7 @@ namespace dvl
 		id(): t(0){}
 		id(T t): t(t){}
 
-		operator T(){
+		operator T() const{
 			return t;
 		}
 
@@ -62,14 +62,14 @@ namespace dvl
 		}
 
 		template<int part>
-		T get()
+		T get() const
 		{
 			static_assert(part < sizeof...(split), "Invalid part-id");
 
 			return (t & mask<part>) >> offset<part>;
 		}
 
-		bool operator==(const id o){return o.t == t;}
+		bool operator==(const id o) const{return o.t == t;}
 	};
 }
 
