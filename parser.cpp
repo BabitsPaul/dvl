@@ -45,10 +45,16 @@ dvl::parser_impl::parse(std::istream& is)
 
 	//initialize parser
 	this->str = &is;
+
+	
+	while(!routines.empty())
+	{
+
+	}
 }
 
 void
 dvl::parser_impl::reset()
 {
-	
+
 }

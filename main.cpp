@@ -1,16 +1,23 @@
 #include "parser.hpp"
+#include "io.hpp"
 
 #include <iostream>
 #include <cstdio>
+#include <string>
+#include <fstream>
+
+#include <codecvt>
+#include <locale>
+#include <clocale>
 
 int main(int argc, char *argv[])
 {
-	dvl::pid id(0);
+	dvl::init_glob_locale();
 
-	id.set_type(7);
-
-	//std::cout << id.get_type() << std::endl;
-	printf("%x\n", id.get_type());
+	std::wfstream wf("test.txt", std::ios::out | std::ios::binary);
+	wf << L"ðĸſððłŋłð@ĸðſŋð€þ→ŋł²" << std::endl;
+	wf.flush();
+	wf.close();
 
 	return 0;
 }

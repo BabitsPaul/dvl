@@ -7,6 +7,7 @@
 #include <exception>
 #include <string>
 #include <istream>
+#include <stack>
 
 //TODO naming for IDs
 
@@ -205,6 +206,9 @@ namespace dvl
 		routine *base;
 
 		std::istream* str;
+
+		std::stack<op_enc> routines;
+		std::stack<lnstruct*> lnstructs;
 	public:
 		parser_impl(routine *base): base(base), str(nullptr){};
 
