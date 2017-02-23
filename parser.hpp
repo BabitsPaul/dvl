@@ -8,6 +8,7 @@
 #include <string>
 #include <istream>
 #include <stack>
+#include <vector>
 
 //TODO naming for IDs
 
@@ -63,6 +64,11 @@ namespace dvl
 		}
 	};
 
+	/*
+	typedef id_table<uint64_t, 27, 27, 8> pid_table;
+	extern pid_table pt;
+	*/
+
 	//constants
 	extern uint8_t TYPE_FORK, 		//fork routine
 					TYPE_LOOP, 		//loop routine
@@ -100,9 +106,9 @@ namespace dvl
 
 	class lnstruct
 	{
-	private:
+	public:
 		static lnstruct EMPTY;
-
+	private:
 		long start;
 
 		//end is inclusive
@@ -114,6 +120,7 @@ namespace dvl
 	public:
 		lnstruct(pid id, long start):start(start), end(0l), id(id),
 										next(&EMPTY), child(&EMPTY){}
+		virtual ~lnstruct();
 
 		void set_end(long end)
 			throw(parser_exception)
@@ -127,8 +134,8 @@ namespace dvl
 		long get_start() const {return start;}
 		long get_end() const {return end;}
 
-		void set_next(lnstruct *next){ this->next = next; }
-		void set_child(lnstruct *child){ this->child = child; }
+		lnstruct*& get_next(){ return next; }
+		lnstruct*& get_child(){ return child; }
 	};
 
 	////////////////////////////////////////////////////////////////////////////
@@ -145,9 +152,6 @@ namespace dvl
 	class routine_interface
 	{
 	public:
-		virtual void run_as_child(routine *r) throw(parser_exception) = 0;
-		virtual void run_as_follower(routine *r) throw(parser_exception) = 0;
-
 		virtual void set_repeat_flag(bool repeat) throw(parser_exception) = 0;
 
 		virtual void store(lnstruct *l) throw(parser_exception) = 0;
@@ -155,7 +159,7 @@ namespace dvl
 		virtual void throw_to_prnt(parser_exception p) = 0;
 		virtual void check_exception_status() throw(parser_exception) = 0;
 
-		virtual std::istream& get_stream() = 0;
+		virtual std::wistream& get_stream() = 0;
 	};
 
 	////////////////////////////////////////////////////////////////////////////
@@ -165,9 +169,9 @@ namespace dvl
 	class parser_interface
 	{
 	public:
-		virtual void parse(std::istream& is) throw(parser_exception) = 0;
+		virtual void parse(std::wistream& is) throw(parser_exception) = 0;
 
-		virtual void reset() = 0;
+		//TODO getter for lnstruct corresponding to base
 	};
 
 	////////////////////////////////////////////////////////////////////////////
@@ -179,53 +183,80 @@ namespace dvl
 	private:
 		pid id;
 	public:
-		routine(pid id): id(id){}
+		struct next
+		{
+			const static int AS_CHILD = 0;
+			const static int AS_NEXT = 1;
 
-		virtual void parse(routine_interface& rif) throw(parser_exception) = 0;
+			routine *next;
+
+			int as;
+		};
+
+		routine(pid id): id(id){}
+		virtual ~routine(){};
+
+		const pid& get_pid(){ return id; }
+
+		virtual next parse(routine_interface& rif) throw(parser_exception) = 0;
 	};
 
 	////////////////////////////////////////////////////////////////////////////
 	// parser impl
 	//
 
-	struct op_enc
-	{
-		static const int AS_CHILD = 0;
-		static const int AS_NEXT = 1;
-
-		routine *r;
-
-		bool repeat;
-
-		int as;
-	};
-
 	class parser_impl : public parser_interface, public routine_interface
 	{
 	private:
+		struct op_enc
+		{
+		friend class parser_impl;
+
+		private:
+			routine *r;
+
+			bool repeat;
+		public:
+			op_enc(routine* r, bool repeat): r(r), repeat(repeat){}
+		};
+
 		routine *base;
 
-		std::istream* str;
+		std::wistream* str;
 
 		std::stack<op_enc> routines;
 		std::stack<lnstruct*> lnstructs;
+
+		parser_exception *e;
 	public:
-		parser_impl(routine *base): base(base), str(nullptr){};
+		parser_impl(routine *base): base(base), str(nullptr), e(nullptr){};
 
-		void parse(std::istream& is) throw(parser_exception);
-		void reset();
+		void parse(std::wistream& is) throw(parser_exception);
 
-		void run_as_child(routine *r) throw(parser_exception) = 0;
-		void run_as_follower(routine *r) throw(parser_exception) = 0;
+		void set_repeat_flag(bool repeat) throw(parser_exception);
 
-		void set_repeat_flag(bool repeat) throw(parser_exception) = 0;
+		void store(lnstruct *l) throw(parser_exception);
 
-		void store(lnstruct *l) throw(parser_exception) = 0;
+		void throw_to_prnt(parser_exception p);
+		void check_exception_status() throw(parser_exception);
 
-		void throw_to_prnt(parser_exception p) = 0;
-		void check_exception_status() throw(parser_exception) = 0;
+		std::wistream& get_stream() = 0;
+	};
 
-		std::istream& get_stream() = 0;
+	////////////////////////////////////////////////////////////////////////////
+	// fork_routine
+	//
+
+	class fork_routine : public routine
+	{
+	private:
+		std::vector<routine*> fork;
+
+		std::vector<routine*>::iterator iter;
+	public:
+		fork_routine(pid id, std::vector<routine*> fork):
+			routine(id),
+			fork(fork), iter(fork.begin()){}
 	};
 }
 
