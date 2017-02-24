@@ -3,6 +3,7 @@
 
 #include <map>
 #include <string>
+#include <array>
 
 namespace dvl
 {
@@ -87,9 +88,46 @@ namespace dvl
 	//
 
 	template<typename T, int... split>
+	class id;
+
+	template<typename T, int  index, int... split>
+	class id_arr_util
+	{
+	public:
+		static void build(id<T, split...>& _id, std::array<T, sizeof...(split)>& arr)
+		{
+			_id.template set<index>(arr[index]);
+			id_arr_util<T, index - 1, split...>::build(_id, arr);
+		}
+
+		static void retrieve(id<T, split...>& _id, std::array<T, sizeof...(split)>& arr)
+		{
+			arr[index] = _id.template get<index>();
+			id_arr_util<T, index - 1, split...>::retrieve(_id, arr);
+		}
+	};
+
+	template<typename T, int... split>
+	class id_arr_util<T, 0, split...>
+	{
+	public:
+		static void build(id<T, split...>& _id, std::array<T, sizeof...(split)> arr)
+		{
+			_id.template set<0>(arr[0]);
+		}
+
+		static void retrieve(id<T, split...>& _id, std::array<T, sizeof...(split)> arr)
+		{
+			arr[0] = _id.template get<0>();
+		}
+	};
+
+	template<typename T, int... split>
 	class id
 	{
 	private:
+		typedef id_arr_util<T, sizeof...(split) - 1, split...> builder;
+
 		T t;
 
 		template<int index>
@@ -101,6 +139,10 @@ namespace dvl
 	public:
 		id(): t(0){}
 		id(T t): t(t){}
+		id(std::array<T, sizeof...(split)> arr)
+		{
+			builder::build(*this, arr);
+		}
 
 		operator T() const{
 			return t;
@@ -128,6 +170,16 @@ namespace dvl
 		}
 
 		bool operator==(const id o) const{return o.t == t;}
+
+		std::array<T, sizeof...(split)>
+		as_arr() const
+		{
+			std::array<T, sizeof...(split)> arr;
+
+			builder::retrieve(*this, arr);
+
+			return arr;
+		}
 	};
 
 	////////////////////////////////////////////////////////////////////////////
@@ -156,7 +208,6 @@ namespace dvl
 		}
 	};
 
-	//TODO order: access is reverse (leaves => root)
 	template<typename T, int level, int... split>
 	struct trie_node
 	{

@@ -6,7 +6,7 @@
 // id
 //
 
-//dvl::pid_table dvl::pt;
+dvl::pid_table dvl::pt;
 
 uint8_t dvl::TYPE_INTERNAL = 0;
 uint8_t dvl::TYPE_FORK = 1;
@@ -22,7 +22,9 @@ dvl::pid dvl::PARSER = dvl::pid(1l);
 void
 dvl::init_parser_module()
 {
-	//TODO register ids with name-register
+	id<int, 8, 8> i({4, 4});
+
+	pt.set_name(pid().set_group(GROUP_INTERNAL), 0, "TYPE_INTERNAL");
 }
 
 ////////////////////////////////////////////////////////////////////////////////

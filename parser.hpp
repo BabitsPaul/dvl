@@ -18,11 +18,12 @@ namespace dvl
 	// routine indentifier
 	//
 
-	class pid : id<uint64_t, 27, 27, 8>
+	class pid : public id<uint64_t, 27, 27, 8>
 	{
 	public:
-		pid(): id(0){}
+		pid(): id(){}
 		pid(uint64_t t): id(t){}
+		pid(uint32_t group, uint32_t element, uint8_t type): id({(uint64_t) group, (uint64_t) element, (uint64_t) type}){}
 
 		template<int part>
 		id& set(uint64_t v) = delete;
@@ -38,13 +39,13 @@ namespace dvl
 
 		pid& set_group(uint32_t group)
 		{
-			id::set<1>(group);
+			id::set<0>(group);
 			return *this;
 		}
 
 		pid& set_element(uint32_t element)
 		{
-			id::set<0>(element);
+			id::set<1>(element);
 			return *this;
 		}
 
@@ -55,19 +56,17 @@ namespace dvl
 
 		uint32_t get_group() const
 		{
-			return id::get<1>();
+			return id::get<0>();
 		}
 
 		uint32_t get_element() const
 		{
-			return id::get<0>();
+			return id::get<1>();
 		}
 	};
 
-	/*
 	typedef id_table<uint64_t, 27, 27, 8> pid_table;
 	extern pid_table pt;
-	*/
 
 	//constants
 	extern uint8_t TYPE_FORK, 		//fork routine
