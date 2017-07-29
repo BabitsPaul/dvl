@@ -584,6 +584,30 @@ namespace dvl
 		static std::string routine_invalid_repeat(){
 			return "Invalid call - routine may not represent more than one entity";
 		}
+
+		/**
+		 * Constructs the message for the parser_exception that will be thrown if
+		 * an attempt is made to insert a lnstruct in an entity that may not have children.
+		 *
+		 * @param cn the name of the routine on which the entity was inserted
+		 * @return "Invalid operation - <cn> doesn't allow child entities"
+		 * @see parser_routine_factory
+ 		 */
+		static std::string lnstruct_invalid_insertion(std::string cn){
+			return "Invalid operation - " + cn + " doesn't allow child entities";
+		}
+
+		/**
+		 * Constructs the message for the parser_exception that will be thrown if
+		 * an attempt is made to insert a lnstruct into an entity that wasn't initialized
+		 * yet.
+		 *
+		 * @return "Output not initialized yet - may not insert entity"
+		 * @see parser_routine_factory
+		 */
+		static std::string lnstruct_premature_insertion(){
+			return "Output not initialized yet - may not insert entity";
+		}
 	};
 
 	////////////////////////////////////////////////////////////////////////////
@@ -1345,15 +1369,26 @@ namespace dvl
 		 * routine is complete, or the routine terminated with an error. This means that
 		 * this any routine inheriting from this class must not be run more often
 		 * than once and should throw an exception if run is called multiple times without
-		 * the repeat-flag set. Instances of this class will be produced by the parser_routine_factory.
+		 * the repeat-flag set. This is ensured by the implementation of parser_routine
+		 * itself. Instances of this class will be produced by the parser_routine_factory.
 		 *
 		 * @see routine_interface
 		 * @see routine
+		 * @see parser_routine::legal_run
 		 */
 		class parser_routine : public routine
 		{
+		private:
+			/**
+			 * Flag to determine whether a repeated run of this routine is legal.
+			 * Set to true on initialization
+			 *
+			 * @see repeat
+			 * @see ri_run
+			 */
+			bool legal_run;
 		public:
-			parser_routine(pid id): routine(id){}
+			parser_routine(pid id): routine(id), legal_run(true){}
 
 			virtual ~parser_routine(){}
 
@@ -1380,8 +1415,47 @@ namespace dvl
 			 * Runs the current routine on the given parser_interface
 			 *
 			 * @throws parser_exception if the rule defined by the routine is violated
+			 * @see ri_run
 			 */
-			virtual void run(routine_interface& ri) throw(parser_exception) = 0;
+			virtual void run(routine_interface &ri) throw(parser_exception) = 0;
+
+			/**
+			 * Called by the routine_interface to run this routine. This method
+			 * will check the legal_run method to assert the routine won't be used
+			 * repeadately and throws a parser_exception if this constraint is violated.
+			 *
+			 * @param ri the routine_interface on which this routine runs
+			 * @see repeat
+			 * @see legal_run
+			 * @see run
+			 */
+			void ri_run(routine_interface &ri)
+				throw(parser_exception)
+			{
+				if(!legal_run)
+					throw parser_exception(get_pid(), parser_exception::routine_invalid_repeat());
+
+				legal_run = false;
+
+				run(ri);
+			}
+
+		protected:
+			/**
+			 * Called by inheriting routines to set the repeat-flag for this routine.
+			 * A call to this method will mark the routine for repetition and mark
+			 * the routine as legal for repetition.
+			 *
+			 * @param ri the routine_interface on which this routine will be marked for repetition
+			 * @see ri_run
+			 * @see legal_run
+			 */
+			void repeat(routine_interface &ri)
+			{
+				ri.repeat();
+
+				legal_run = true;
+			}
 		};
 
 		/**

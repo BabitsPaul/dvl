@@ -260,13 +260,11 @@ struct routine_factory_util
 {
 	//no need to check pids, as these will already be checked by models used to
 	//create implementations
-
-	//TODO unify error-messages (in progress)
-	//TODO assert routines will run precisely once (possibly via embedding calls to
-	// routine_interface into parser_routine
 	friend class dvl::parser_routine_factory;
 
-	class parser_fork_routine : public dvl::parser_routine_factory::parser_routine
+	typedef dvl::parser_routine_factory::parser_routine base_routine;
+
+	class parser_fork_routine : public base_routine
 	{
 	private:
 		dvl::fork_routine* fr;
@@ -277,7 +275,7 @@ struct routine_factory_util
 		dvl::lnstruct *last_success;
 	public:
 		parser_fork_routine(dvl::fork_routine* fr)
-			: dvl::parser_routine_factory::parser_routine(fr->get_pid())
+			: base_routine(fr->get_pid())
 
 		{
 			this->fr = fr;
@@ -332,16 +330,18 @@ struct routine_factory_util
 			{
 				ri.run_as_child(*f_iter);
 				f_iter++;
+
+				base_routine::repeat(ri);
 			}
 		}
 	};
 
-	class parser_empty_routine : public dvl::parser_routine_factory::parser_routine
+	class parser_empty_routine : public base_routine
 	{
 	private:
 		dvl::lnstruct *ln = nullptr;
 	public:
-		parser_empty_routine() : dvl::parser_routine_factory::parser_routine(dvl::EMPTY){}
+		parser_empty_routine() : base_routine(dvl::EMPTY){}
 
 		dvl::lnstruct* get_result()
 		{
@@ -351,20 +351,17 @@ struct routine_factory_util
 		void place_child(dvl::lnstruct* l)
 			throw(dvl::parser_exception)
 		{
-			throw dvl::parser_exception(dvl::EMPTY, "Invalid operation - Empty routines may not have children");
+			throw dvl::parser_exception(dvl::EMPTY, dvl::parser_exception::lnstruct_invalid_insertion("emtpy_routine"));
 		}
 
 		void run(dvl::routine_interface& ri)
 			throw(dvl::parser_exception)
 		{
-			if(ln != nullptr)
-				throw dvl::parser_exception(get_pid(), dvl::parser_exception::routine_invalid_repeat());
-
 			ln = new dvl::lnstruct(dvl::EMPTY, ri.get_istream().tellg());
 		}
 	};
 
-	class parser_loop_routine : public dvl::parser_routine_factory::parser_routine
+	class parser_loop_routine : public base_routine
 	{
 	private:
 		unsigned int run_ct = 0;
@@ -374,7 +371,7 @@ struct routine_factory_util
 		dvl::lnstruct *ln;
 		dvl::lnstruct **insert_pos;
 	public:
-		parser_loop_routine(dvl::loop_routine *r) : dvl::parser_routine_factory::parser_routine(r->get_pid()),
+		parser_loop_routine(dvl::loop_routine *r) : base_routine(r->get_pid()),
 			r(r), ln(nullptr), insert_pos(nullptr)
 		{}
 
@@ -387,7 +384,7 @@ struct routine_factory_util
 			throw(dvl::parser_exception)
 		{
 			if(insert_pos == nullptr)
-				throw dvl::parser_exception(get_pid(), "Can't build output yet");
+				throw dvl::parser_exception(get_pid(), dvl::parser_exception::lnstruct_premature_insertion());
 
 			//place new lnstruct at predefined position and update
 			*insert_pos = ln;
@@ -415,7 +412,7 @@ struct routine_factory_util
 				// terminate the loop.
 				if(run_ct < r->get_min_iterations() ||
 						r->get_min_iterations() == dvl::loop_routine::_INFINITY)
-					throw e;
+					throw;
 				else
 					return;
 			}
@@ -427,20 +424,20 @@ struct routine_factory_util
 				return;
 			}
 
-			ri.repeat();					//mark routine for repetition
+			base_routine::repeat(ri);		//mark routine for repetition
 			ri.run_as_child(r->get_loop());	//run routine to loop over as next
 			run_ct++;						//increment loop count
 		}
 	};
 
-	class parser_logic_routine : public dvl::parser_routine_factory::parser_routine
+	class parser_logic_routine : public base_routine
 	{
 	private:
 		dvl::logic_routine *r;
 
 		dvl::lnstruct *ln;
 	public:
-		parser_logic_routine(dvl::logic_routine *r): dvl::parser_routine_factory::parser_routine(r->get_pid()),
+		parser_logic_routine(dvl::logic_routine *r): base_routine(r->get_pid()),
 			r(r), ln(nullptr)
 		{}
 
@@ -453,7 +450,7 @@ struct routine_factory_util
 			throw(dvl::parser_exception)
 		{
 			if(ln == nullptr)
-				throw dvl::parser_exception(get_pid(), "Can't place lnstruct");
+				throw dvl::parser_exception(get_pid(), dvl::parser_exception::lnstruct_premature_insertion());
 
 			ln->get_child() = l;
 		}
@@ -461,12 +458,7 @@ struct routine_factory_util
 		void run(dvl::routine_interface &ri)
 			throw(dvl::parser_exception)
 		{
-			// ensure lnstruct runs precisely once
-			// and initialize ln
-			if(ln == nullptr)
-				ln = new dvl::lnstruct(get_pid(), ri.get_istream().tellg());
-			else
-				throw dvl::parser_exception(get_pid(), "Invalid state, cant run logic-routine twice");
+			ln = new dvl::lnstruct(get_pid(), ri.get_istream().tellg());
 
 			// place routines to run
 			if(r->get_child() != nullptr)
@@ -477,14 +469,14 @@ struct routine_factory_util
 		}
 	};
 
-	class parser_matcher_routine : public dvl::parser_routine_factory::parser_routine
+	class parser_matcher_routine : public base_routine
 	{
 	private:
 		const std::wstring &s;
 
 		dvl::lnstruct *ln;
 	public:
-		parser_matcher_routine(dvl::string_matcher_routine *r): dvl::parser_routine_factory::parser_routine(r->get_pid()),
+		parser_matcher_routine(dvl::string_matcher_routine *r): base_routine(r->get_pid()),
 			s(r->get_str()), ln(nullptr)
 		{}
 
@@ -496,15 +488,12 @@ struct routine_factory_util
 		void place_child(dvl::lnstruct *l)
 			throw(dvl::parser_exception)
 		{
-			throw dvl::parser_exception(get_pid(), "Matcher routine accepts no child-elements");
+			throw dvl::parser_exception(get_pid(), dvl::parser_exception::lnstruct_invalid_insertion("string_matcher_routine"));
 		}
 
 		void run(dvl::routine_interface &ri)
 			throw(dvl::parser_exception)
 		{
-			if(ln != nullptr)
-				throw dvl::parser_exception(get_pid(), "Matcher routine is not repeatable");
-
 			ln = new dvl::lnstruct(get_pid(), ri.get_istream().tellg());
 
 			// compare input to predefined string
@@ -515,45 +504,40 @@ struct routine_factory_util
 		}
 	};
 
-	class parser_echo_routine : public dvl::parser_routine_factory::parser_routine
+	class parser_echo_routine : public base_routine
 	{
 	private:
 		dvl::lnstruct *ln;
 
 		const std::wstring& str;
 	public:
-		parser_echo_routine(dvl::echo_routine *r) : dvl::parser_routine_factory::parser_routine(r->get_pid()),
+		parser_echo_routine(dvl::echo_routine *r) : base_routine(r->get_pid()),
 			ln(nullptr), str(r->get_msg())
-		{
-
-		}
+		{}
 
 		dvl::lnstruct *get_result(){ return ln; }
 
 		void place_child(dvl::lnstruct *l)
 			throw(dvl::parser_exception)
 		{
-			throw dvl::parser_exception(get_pid(), "Can't place child in echo-routine");
+			throw dvl::parser_exception(get_pid(), dvl::parser_exception::lnstruct_invalid_insertion("parser_echo_routine"));
 		}
 
 		void run(dvl::routine_interface &ri)
 			throw(dvl::parser_exception)
 		{
-			if(ln != nullptr)
-				throw dvl::parser_exception(get_pid(), "Can't run routine twice");
-
 			ln = new dvl::lnstruct(get_pid(), ri.get_istream().tellg());
 
 			std::wcout << str << std::endl;
 		}
 	};
 
-	class parser_stack_routine : public dvl::parser_routine_factory::parser_routine
+	class parser_stack_routine : public base_routine
 	{
 	private:
 		dvl::lnstruct *ln;
 	public:
-		parser_stack_routine(dvl::stack_trace_routine *r) : dvl::parser_routine_factory::parser_routine(r->get_pid()),
+		parser_stack_routine(dvl::stack_trace_routine *r) : base_routine(r->get_pid()),
 			ln(nullptr){}
 
 		dvl::lnstruct *get_result()
@@ -564,15 +548,12 @@ struct routine_factory_util
 		void place_child(dvl::lnstruct *l)
 			throw(dvl::parser_exception)
 		{
-			throw dvl::parser_exception(get_pid(), "Can't place child-element in stack-trace-routine");
+			throw dvl::parser_exception(get_pid(), dvl::parser_exception::lnstruct_invalid_insertion("parser_stack_routine"));
 		}
 
 		void run(dvl::routine_interface &ri)
 			throw(dvl::parser_exception)
 		{
-			if(ln != nullptr)
-				throw dvl::parser_exception(get_pid(), "Cant run routine twice");
-
 			ln = new dvl::lnstruct(get_pid(), ri.get_istream().tellg());
 
 			//TODO print status via visitor-pattern
