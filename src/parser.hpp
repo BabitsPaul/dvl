@@ -451,6 +451,19 @@ namespace dvl
 	 * @see TYPE_INTERNAL
 	 */
 				ROOT = pid({GROUP_INTERNAL, 2l, TYPE_INTERNAL}),
+
+	/**
+	 * Identifies the helper-identites inserted by loop-routines into the lnstruct-tree
+	 * to structurize output.
+	 *
+	 * GROUP = GROUP_INTERNAL, Element = 3, Type = TYPE_INTERNAL
+	 *
+	 * @see GROUP_INTERNAL
+	 * @see TYPE_INTERNAL
+	 * @see loop_routine
+	 * @see parser_tree_builder
+	 */
+				LOOP_HELPER = pid({GROUP_INTERNAL, 3l, TYPE_INTERNAL}),
 	/**
 	 * Identifies echo-routines.
 	 * Group = GROUP_DIAGNOSTIC, Element = 0, Type = TYPE_INTERNAL
@@ -1042,7 +1055,12 @@ namespace dvl
 	// stack trace routine
 	//
 
-	//TODO stack-trace
+	/**
+	 * Provides a method to display the stack-trace of a parser during runtime.
+	 * If run, this routine will display the stack-trace.
+	 *
+	 * @see parser_routine_interface::visit
+	 */
 	class stack_trace_routine : public routine
 	{
 	public:
@@ -1346,6 +1364,13 @@ namespace dvl
 		 * returns the input-stream associated with this parser
 		 */
 		virtual std::wistream& get_istream() = 0;
+
+		/**
+		 * Used to display a stacktrace for the specified stack_trace_routine
+		 *
+		 * @param r the routine for which the stacktrace will be displayed.
+		 */
+		virtual void visit(stack_trace_routine& r) = 0;
 	};
 
 	////////////////////////////////////////////////////////////////////////////////////

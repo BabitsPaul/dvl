@@ -386,16 +386,19 @@ struct routine_factory_util
 			if(insert_pos == nullptr)
 				throw dvl::parser_exception(get_pid(), dvl::parser_exception::lnstruct_premature_insertion());
 
-			//place new lnstruct at predefined position and update
-			*insert_pos = ln;
+			//wrap ln into helper to keep next-slot free
+			dvl::lnstruct *helper = new dvl::lnstruct(dvl::LOOP_HELPER, ln->get_start());
+			helper->set_end(ln->get_end());
+			helper->get_child() = ln;
+
+			//insert helper at next insertion-position
+			*insert_pos = helper;
 			insert_pos = &ln->get_next();
 		}
 
 		void run(dvl::routine_interface& ri)
 			throw(dvl::parser_exception)
 		{
-			// TODO wrap in simple logic_routine to assert next-slot is free in lnstruct
-
 			//initialize ln and insert_pos
 			if(ln == nullptr)
 			{
@@ -543,9 +546,11 @@ struct routine_factory_util
 	{
 	private:
 		dvl::lnstruct *ln;
+
+		dvl::stack_trace_routine *r;
 	public:
 		parser_stack_routine(dvl::stack_trace_routine *r) : base_routine(r->get_pid()),
-			ln(nullptr){}
+			ln(nullptr), r(r){}
 
 		dvl::lnstruct *get_result()
 		{
@@ -563,7 +568,7 @@ struct routine_factory_util
 		{
 			ln = new dvl::lnstruct(get_pid(), ri.get_istream().tellg());
 
-			//TODO print status via visitor-pattern
+			ri.visit(*r);
 		}
 	};
 };
@@ -587,7 +592,27 @@ dvl::parser_routine_factory::parser_routine_factory()
 	});
 
 	register_transformation(TYPE_INTERNAL, [](routine *r)->parser_routine_factory::parser_routine*{
-		return nullptr;	//TODO split TYPE_INTERNAL into relevant types
+		switch(r->get_pid().get_group())
+		{
+		case GROUP_INTERNAL:
+			switch(r->get_pid().get_element())
+			{
+			case 0:	//empty routine
+				return new routine_factory_util::parser_empty_routine((empty_routine*) r);
+			}
+			break;
+		case GROUP_DIAGNOSTIC:
+			switch(r->get_pid().get_element())
+			{
+			case 0:	// echo routine
+				return new routine_factory_util::parser_echo_routine((echo_routine*) r);
+			case 1:
+				return new routine_factory_util::parser_stack_routine((stack_trace_routine*) r);
+			}
+			break;
+		}
+
+		throw dvl::parser_exception("No routines with the specified group available");
 	});
 }
 
