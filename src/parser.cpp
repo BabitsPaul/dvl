@@ -499,8 +499,15 @@ struct routine_factory_util
 			// compare input to predefined string
 			const wchar_t *str = s.c_str();
 			for(const wchar_t *c = str; c < str + s.length(); c++)
-				if((wint_t) *c != ri.get_istream().get())	//TODO handle WEOF
+			{
+				wint_t sc = ri.get_istream().get();
+
+				if(sc == WEOF)
+					throw dvl::parser_exception(get_pid(), "Reached EOF");
+
+				if((wint_t) *c != sc)
 					throw dvl::parser_exception(get_pid(), "Mismatch in string");
+			}
 		}
 	};
 
