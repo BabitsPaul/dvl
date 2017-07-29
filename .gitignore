@@ -1,9 +1,7 @@
-build
-test
-.imdone
+Default/
 doc
-snippet_dump.txt
-run
-util/depend.d
-util/sh.sh
-core.*
+dvl.doxyfile
+doc_ln.html
+.project
+.settings
+.cproject

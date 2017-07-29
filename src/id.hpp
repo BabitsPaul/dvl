@@ -4,6 +4,8 @@
 #include <map>
 #include <string>
 #include <array>
+#include <stdexcept>
+#include <algorithm>
 
 namespace dvl
 {
@@ -141,6 +143,7 @@ namespace dvl
 		id(T t): t(t){}
 		id(std::array<T, sizeof...(split)> arr)
 		{
+			t = (T) 0;
 			builder::build(*this, arr);
 		}
 
@@ -195,43 +198,109 @@ namespace dvl
 	private:
 		typedef id<T, split...> int_id;
 
-		trie_node<T, sizeof...(split), split...> root = {"", {}};
+		trie_node<T, sizeof...(split), split...> root = {false, L"", {}};
 	public:
-		void set_name(int_id id, int lvl, std::string name)
+		void set_name(int_id id, int lvl, std::wstring name)
+			throw(std::out_of_range)
 		{
-			root._get_name(id, lvl + 1) = name;
+			root._set_name(id, lvl + 1, name);
 		}
 
-		const std::string& get_name(int_id id, int lvl)
+		const std::wstring* get_name(int_id id, int lvl)
+			throw(std::out_of_range)
 		{
 			return root._get_name(id, lvl + 1);
+		}
+
+		const std::wstring table_to_string(std::wstring def=L"???")
+		{
+			return root.to_string(L"", def);
 		}
 	};
 
 	template<typename T, int level, int... split>
 	struct trie_node
 	{
-		std::string name;
+		typedef std::map<T, trie_node<T, level - 1, split...>> child_map;
 
-		std::map<T, trie_node<T, level - 1, split...>> c;
+		bool name_set = false;
 
-	 	std::string& _get_name(id<T, split...> _id, int depth)
+		std::wstring name;
+
+		child_map c;
+
+	 	std::wstring* _get_name(id<T, split...> _id, int depth)
+			throw(std::out_of_range)
 		{
-			return depth == 0 ? name : c[_id.template get<sizeof...(split) - level>()]._get_name(_id, depth - 1);
+			if(depth == 0)
+				return name_set ? &name : nullptr;
+			else if(c.count(_id.template get<sizeof...(split) - level>()))
+				return c[_id.template get<sizeof...(split) - level>()]._get_name(_id, depth - 1);
+			else
+				return nullptr;
+		}
+
+		void _set_name(id<T, split...> _id, int depth, std::wstring str)
+			throw(std::out_of_range)
+		{
+			if(depth == 0)
+			{
+				name = str;
+				name_set = true;
+			}
+			else
+				c[_id.template get<sizeof...(split) - level>()]._set_name(_id, depth - 1, str);
+		}
+
+		std::wstring to_string(std::wstring indent, std::wstring def = L"???")
+			const
+		{
+			std::wstring result;
+
+			result.append(indent).append(name_set ? name : def).append(L"\n");
+
+			std::wstring child_indent;
+			child_indent.append(indent).append(L"\t");
+
+			for(auto const &iter : c)
+				result.append(iter.second.to_string(child_indent, def));
+
+			return result;
 		}
 	};
 
 	template<typename T, int... split>
 	struct trie_node<T, 0, split...>
 	{
-		std::string name;
+		bool name_set = false;
 
-	 	std::string& _get_name(id<T, split...>, int depth)
+		std::wstring name;
+
+	 	std::wstring* _get_name(id<T, split...>, int depth)
+			throw(std::out_of_range)
 		{
 			if(depth == 0)
-				return name;
+				return name_set ? &name : nullptr;
 
-			throw std::string("Too large depth ").append(std::to_string(depth));
+			throw std::out_of_range("Invalid depth");
+		}
+
+		void _set_name(id<T, split...>, int depth, std::wstring str)
+			throw(std::out_of_range)
+		{
+			if(depth == 0)
+			{
+				name = str;
+				name_set = true;
+			}
+			else
+				throw std::out_of_range("Invalid depth");
+		}
+
+		std::wstring to_string(std::wstring indent, std::wstring def = L"???")
+			const
+		{
+			return std::wstring(L"").append(indent).append(name_set ? name : def).append(L"\n");
 		}
 	};
 }

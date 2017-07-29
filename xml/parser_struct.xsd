@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema xmlns="http://www.w3.org/2001/XMLSchema" xmlns:tns="http://www.example.org/parser_struct/" targetNamespace="http://www.example.org/parser_struct/">
+    <complexType name="parser_struct">
+    	<attribute name="pid" type="string"></attribute>
+    </complexType>
+
+    <complexType name="logic_routine">
+    	<complexContent>
+    		<extension base="tns:parser_struct">
+    			<sequence>
+    				<element name="next" type="tns:parser_struct"></element>
+    				<element name="child" type="tns:parser_struct"></element>
+    			</sequence>
+    		</extension>
+    	</complexContent>
+    </complexType>
+
+    <complexType name="loop_routine">
+    	<complexContent>
+    		<extension base="tns:parser_struct"></extension>
+    	</complexContent>
+    </complexType>
+    
+    <complexType name="fork_routine">
+    	<complexContent>
+    		<extension base="tns:parser_struct"></extension>
+    	</complexContent>
+    </complexType>
+    
+
+    <complexType name="fixed_routine">
+    	<complexContent>
+    		<extension base="tns:parser_struct"></extension>
+    	</complexContent>
+    </complexType>
+    
+    <complexType name="internal_routine">
+    	<complexContent>
+    		<extension base="tns:parser_struct"></extension>
+    	</complexContent>
+    </complexType>
+</schema>

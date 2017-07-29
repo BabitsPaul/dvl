@@ -3,7 +3,10 @@
 
 namespace dvl
 {
-	//enforce UTF8 for wide streams
+	/**
+	 * Initializes the global locale for this application. This
+	 * enforces UTF8 for std::wcout/std::wcin and any wide file-streams
+	 */
 	void init_glob_locale();
 }
 
