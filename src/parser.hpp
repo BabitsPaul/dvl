@@ -1548,6 +1548,56 @@ namespace dvl
 		 */
 		std::map<uint8_t, transform> transformations;
 	};
+
+	//////////////////////////////////////////////////////////////////////////////////
+	// parser
+	//
+
+	class parser : public routine_interface
+	{
+	private:
+		/**
+		 * Datastructure to hold a stack-elemment that holds a
+		 * stackframe for a single step in the execution of the
+		 * graph defined by routines.
+		 */
+		struct stack_helper
+		{
+		public:
+			routine *r;
+
+			routine *next;
+
+			bool repeat;
+		};
+
+		std::deque<stack_helper> exec_stack;
+
+		parser_routine_factory factory;
+
+		// validates the inputstream
+		bool valid_istream();
+	public:
+		parser();
+		~parser();
+
+		void run() throw(parser_exception);
+
+		lnstruct *get_output_root();
+
+		// routine interface
+		void repeat();
+
+		void run_as_next(routine *r);
+
+		void run_as_child(routine *r);
+
+		void check_child_exception() throw(parser_exception);
+
+		std::wistream &get_istream();
+
+		void visit(stack_trace_routine &r);
+	};
 }
 
 #endif

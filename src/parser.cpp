@@ -610,7 +610,7 @@ dvl::parser_routine_factory::parser_routine_factory()
 			switch(r->get_pid().get_element())
 			{
 			case 0:	//empty routine
-				return new routine_factory_util::parser_empty_routine((empty_routine*) r);
+				return new routine_factory_util::parser_empty_routine();
 			}
 			break;
 		case GROUP_DIAGNOSTIC:
@@ -624,7 +624,7 @@ dvl::parser_routine_factory::parser_routine_factory()
 			break;
 		}
 
-		throw dvl::parser_exception("No routines with the specified group available");
+		throw dvl::parser_exception(PARSER, "No routines with the specified group available");
 	});
 }
 
@@ -643,3 +643,7 @@ dvl::parser_routine_factory::register_transformation(uint8_t type, transform t)
 {
 	transformations[type] = t;
 }
+
+/////////////////////////////////////////////////////////////////////////////
+// parser
+//
