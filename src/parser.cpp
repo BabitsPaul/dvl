@@ -70,47 +70,59 @@ void
 dvl::routine_tree_builder::insert_node(routine *rn)
 	throw(parser_exception)
 {
-	if(r == nullptr)
+	try{
+		if(r == nullptr)
+		{
+			//first node inserted => can't set into relation with
+			//any other node
+			r = rn;
+			return;
+		}
+
+		if(rn == nullptr)
+		{
+			delete rn;
+			throw parser_exception(PARSER, "No routine specified");
+		}
+
+		switch(ins_mode)
+		{
+		case insertion_mode::NONE:
+			throw parser_exception(PARSER, "No insertion-mode specified");
+		case AS_CHILD:
+			if(r->get_pid().get_type() != TYPE_STRUCT)
+				throw parser_exception(PARSER, parser_exception::ptree_builder_invalid_routine());
+
+			((logic_routine*) r)->set_child(rn);
+			break;
+		case insertion_mode::AS_NEXT:
+			if(r->get_pid().get_type() != TYPE_STRUCT)
+				throw parser_exception(PARSER, parser_exception::ptree_builder_invalid_routine());
+
+			((logic_routine*) r)->set_next(rn);
+			break;
+		case insertion_mode::AS_FORK:
+			if(r->get_pid().get_type() != TYPE_FORK)
+				throw parser_exception(PARSER, parser_exception::ptree_builder_invalid_routine());
+
+			((fork_routine*) r)->add_fork(rn);
+			break;
+		case insertion_mode::AS_LOOP:
+			if(r->get_pid().get_type() != TYPE_LOOP)
+				throw parser_exception(PARSER, parser_exception::ptree_builder_invalid_routine());
+
+			((loop_routine*) r)->set_loop(rn);
+			break;
+		default:
+			throw parser_exception(PARSER, "Invalid insertion-mode");
+		}
+
+		routines.emplace_back(rn);
+	}catch(const parser_exception &e)
 	{
-		//first node inserted => can't set into relation with
-		//any other node
-		r = rn;
-		return;
-	}
-
-	if(rn == nullptr)
-		throw parser_exception(PARSER, "No routine specified");
-
-	switch(ins_mode)
-	{
-	case insertion_mode::NONE:
-		throw parser_exception(PARSER, "No insertion-mode specified");
-	case AS_CHILD:
-		if(r->get_pid().get_type() != TYPE_STRUCT)
-			throw parser_exception(PARSER, parser_exception::ptree_builder_invalid_routine());
-
-		((logic_routine*) r)->set_child(rn);
-		break;
-	case insertion_mode::AS_NEXT:
-		if(r->get_pid().get_type() != TYPE_STRUCT)
-			throw parser_exception(PARSER, parser_exception::ptree_builder_invalid_routine());
-
-		((logic_routine*) r)->set_next(rn);
-		break;
-	case insertion_mode::AS_FORK:
-		if(r->get_pid().get_type() != TYPE_FORK)
-			throw parser_exception(PARSER, parser_exception::ptree_builder_invalid_routine());
-
-		((fork_routine*) r)->add_fork(rn);
-		break;
-	case insertion_mode::AS_LOOP:
-		if(r->get_pid().get_type() != TYPE_LOOP)
-			throw parser_exception(PARSER, parser_exception::ptree_builder_invalid_routine());
-
-		((loop_routine*) r)->set_loop(rn);
-		break;
-	default:
-		throw parser_exception(PARSER, "Invalid insertion-mode");
+		// if insertion fails delete the routine and throw an error
+		delete rn;
+		throw;
 	}
 }
 
