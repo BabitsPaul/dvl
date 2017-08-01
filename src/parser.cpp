@@ -9,8 +9,6 @@
 const std::wstring
 dvl::pid_table::UNKNOWN = L"Unknown";
 
-dvl::pid_table dvl::pt;
-
 const std::map<uint8_t, std::wstring>
 dvl::pid_table::types = {{TYPE_INTERNAL,			L"TYPE_INTERNAL"},
 						 {TYPE_FORK, 				L"TYPE_FORK"},
@@ -19,19 +17,18 @@ dvl::pid_table::types = {{TYPE_INTERNAL,			L"TYPE_INTERNAL"},
 					 	 {TYPE_STRING_MATCHER,		L"TYPE_STRING_MATCHER"},
 						 {TYPE_EMPTY,				L"TYPE_EMPTY"}};
 
-void
-dvl::init_parser_module()
+dvl::pid_table::pid_table()
 {
 	//register internal ids
-	pt.set_group(pid().set_group(GROUP_INTERNAL), L"INTERNAL");
+	set_group(pid().set_group(GROUP_INTERNAL), L"INTERNAL");
 
-	pt.set_element(EMPTY, L"EMPTY");
-	pt.set_element(PARSER, L"PARSER");
+	set_element(EMPTY, L"EMPTY");
+	set_element(PARSER, L"PARSER");
 
 	//register diagnostic routines
-	pt.set_group(pid().set_group(GROUP_DIAGNOSTIC), L"DIAGNOSTIC");
+	set_group(pid().set_group(GROUP_DIAGNOSTIC), L"DIAGNOSTIC");
 
-	pt.set_element(ECHO, L"ECHO");
+	set_element(ECHO, L"ECHO");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -647,3 +644,125 @@ dvl::parser_routine_factory::register_transformation(uint8_t type, transform t)
 /////////////////////////////////////////////////////////////////////////////
 // parser
 //
+
+dvl::parser::parser(parser_context &context):
+	factory(new parser_routine_factory()),
+	next_child(nullptr),
+	e(nullptr),
+	str(context.str)
+{
+	// initialize execution-info
+	root = factory->build_routine(context.builder.get());
+	exec_stack.push_front(stack_helper(root));
+}
+
+void
+dvl::parser::run()
+	throw(dvl::parser_exception)
+{
+	//TODO clear exception-status upon check
+
+	while(exec_stack.size())
+	{
+		stack_helper &h = exec_stack[0];
+
+		// execute routine
+		try{
+			h.r->ri_run(*this);
+		}catch(const parser_exception &e)
+		{
+			this->e = e.clone();
+
+			// unwind the stack and discard results
+			while(exec_stack.size() && !exec_stack[0].repeat)
+				exec_stack.pop_front();
+
+			// run parent-routine
+			next_child = nullptr;	//reset next_child if set by current routine
+			continue;
+		}
+
+		// update stack according to new configuration
+		if(next_child != nullptr)
+		{	// execute routine placed for child-execution  next
+			exec_stack.push_front(stack_helper(next_child));	// => place routine in stack
+			next_child = nullptr;	// reset next child
+		}
+		else if(h.repeat)
+		{
+			// current routine is marked for repetition => repeat
+			continue;
+		}
+		else if(h.next != nullptr)
+		{	// run the routine following the current routine
+			// insert result-values into stack-frame
+			if(h.result == nullptr)
+			{
+				h.result = h.r->get_result();
+				h.insert_next = h.result;
+			}
+			else
+			{
+				h.insert_next->get_next() = h.r->get_result();
+				h.insert_next = h.insert_next->get_next();
+			}
+
+			// update execution-info of stackframe
+			h.r = h.next;
+			h.next = nullptr;
+			h.repeat = false;
+		}
+		else
+		{	// no routines to run on the current level
+			// unwind stack until first routine that will be repeated is encountered
+			while(!exec_stack.empty() && !exec_stack[0].repeat)
+			{
+				lnstruct *ln = exec_stack[0].r->get_result();
+				exec_stack.pop_front();
+
+				// place lnstruct
+				exec_stack[0].r->place_child(ln);
+			}
+
+			//TODO preserve result of last routine_run (needs to be kept for backup)
+			// => store transformed root of the execution-graph
+		}
+	}
+}
+
+dvl::lnstruct*
+dvl::parser::get_output_root()
+{
+	return nullptr;
+}
+
+void
+dvl::parser::repeat()
+{
+	exec_stack[0].repeat = true;
+}
+
+void
+dvl::parser::run_as_next(routine *r)
+{
+	exec_stack[0].r = factory->build_routine(r);
+}
+
+void
+dvl::parser::run_as_child(routine *r)
+{
+	next_child = factory->build_routine(r);
+}
+
+void
+dvl::parser::check_child_exception()
+	throw(parser_exception)
+{
+	//TODO
+}
+
+void
+dvl::parser::visit(stack_trace_routine &r)
+{
+	//TODO
+}

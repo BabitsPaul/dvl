@@ -15,13 +15,9 @@ int main(int argc, char *argv[])
 	using namespace dvl;
 
 	init_glob_locale();
-	init_parser_module();
 
 	pid root(5, 5, TYPE_STRUCT),
 			loop(5, 6, TYPE_LOOP);
-	pt.set_group(root, L"test");
-	pt.set_element(root, L"root");
-	pt.set_element(loop, L"loop");
 
 	std::wcout << L"Root: " << (uint64_t) root << std::endl
 			<< L"Loop: " << (uint64_t) loop << std::endl

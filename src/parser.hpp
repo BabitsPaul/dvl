@@ -231,6 +231,12 @@ namespace dvl
 				return *tmp;
 		}
 	public:
+		/**
+		 * Constructs a new pid_table and initializes it with entities that were predefined
+		 * in this header.
+		 */
+		pid_table();
+
 		void set_name(id<uint64_t, 27, 27, 8>, int, std::wstring) = delete;
 		const std::wstring& get_name(id<uint64_t, 27, 27, 8>, int) = delete;
 
@@ -338,13 +344,6 @@ namespace dvl
 			return res;
 		}
 	};
-
-	/**
-	 * the pid_table used to associated all pids used by the parser. Any
-	 * pids created in other tables should be registered here, if naming is
-	 * required.
-	 */
-	extern pid_table pt;	//TODO don't use global variable, but context associated with operation
 
 	/**
 	 * the type-identifier of forks.
@@ -552,7 +551,7 @@ namespace dvl
 		 *
 		 * @return a clone of this instance of parser_exception
 		 */
-		virtual parser_exception* clone()
+		virtual parser_exception* clone() const
 		{
 			return new parser_exception(id, msg);
 		}
@@ -720,10 +719,11 @@ namespace dvl
 		 *
 		 * @param indent the indent used for this structure (child-structure will receive indent + "\t")
 		 */
-		std::wstring structure(std::wstring indent=L"")
+		std::wstring structure(pid_table &pt, std::wstring indent=L"")
 		{
-			if(this == nullptr)
-				return L"Error - Nullptr as this\n";
+			// TODO purpose???
+			// if(this == nullptr)
+			//	return L"Error - Nullptr as this\n";
 
 			std::wstring result = L"";
 			result.append(indent);
@@ -733,10 +733,10 @@ namespace dvl
 			result.append(L"\n");
 
 			if(child != nullptr)
-				result.append(child->structure(indent + L"\t"));
+				result.append(child->structure(pt, indent + L"\t"));
 
 			if(next != nullptr)
-				result.append(next->structure(indent));
+				result.append(next->structure(pt, indent));
 
 			return result;
 		}
@@ -1364,14 +1364,20 @@ namespace dvl
 
 		/**
 		 * Runs the specified routine as following up on the current routine. Note that
-		 * child-routines will always be run first.
+		 * child-routines will always be run first. Multiple calls to this method in the same
+		 * run will have the effect of overriding each other. Only the last call during a run
+		 * will have effect on the execution.
 		 *
 		 * @param r the routine that should run after this routine completed
 		 */
 		virtual void run_as_next(routine* r) = 0;
 
 		/**
-		 * Runs the specified routine as child of this routine
+		 * Runs the specified routine as child of this routine. Multiple calls to this
+		 * method within the same run will of a routine will have the effect of overriding each
+		 * other. Only the last call will have any effect.
+		 *
+		 * @param r the routine to run
 		 */
 		virtual void run_as_child(routine* r) = 0;
 
@@ -1553,9 +1559,25 @@ namespace dvl
 	// parser
 	//
 
+	/**
+	 * A context-structure holding all relevant objects required to run
+	 * the parser.
+	 *
+	 * @see parser
+	 */
+	struct parser_context
+	{
+	public:
+		std::wistream &str;
+		routine_tree_builder &builder;
+		pid_table &pt;
+	};
+
 	class parser : public routine_interface
 	{
 	private:
+		typedef parser_routine_factory::parser_routine proutine;
+
 		/**
 		 * Datastructure to hold a stack-elemment that holds a
 		 * stackframe for a single step in the execution of the
@@ -1564,22 +1586,43 @@ namespace dvl
 		struct stack_helper
 		{
 		public:
-			routine *r;
+			stack_helper(proutine *r): r(r){}
 
-			routine *next;
+			proutine *r;
 
-			bool repeat;
+			proutine *next = nullptr;
+
+			bool repeat = false;
+
+			lnstruct *result = nullptr;
+
+			lnstruct *insert_next = nullptr;
 		};
 
 		std::deque<stack_helper> exec_stack;
 
-		parser_routine_factory factory;
+		parser_routine_factory *factory;
+
+		proutine *next_child;
+
+		/**
+		 * The root of the parser_tree
+		 */
+		proutine *root;
+
+		/**
+		 * Holds a clone of the last thrown routine that will
+		 * be handled by the parent-routine of the current routine.
+		 */
+		parser_exception *e;
+
+		std::wistream& str;
 
 		// validates the inputstream
 		bool valid_istream();
 	public:
-		parser();
-		~parser();
+		parser(parser_context &context);
+		~parser(){}
 
 		void run() throw(parser_exception);
 
@@ -1594,7 +1637,7 @@ namespace dvl
 
 		void check_child_exception() throw(parser_exception);
 
-		std::wistream &get_istream();
+		std::wistream &get_istream(){ return str; }//TODO
 
 		void visit(stack_trace_routine &r);
 	};
