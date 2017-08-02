@@ -645,37 +645,181 @@ dvl::parser_routine_factory::register_transformation(uint8_t type, transform t)
 // parser
 //
 
+void
+dvl::parser::validate_istream()
+	throw(parser_exception)
+{
+	// TODO check if stream passed is readable and has markers enabled.
+}
+
+void
+dvl::parser::unwind_stack(bool exception_unwind)
+{
+	if(exception_unwind)
+	{
+		// make sure top-most frame will be deleted by unsetting frames that
+		// might keep the frame alive (unset repeat-flag and set next to nullptr)
+		exec_stack[0].repeat = false;
+
+		if(exec_stack[0].next != nullptr)
+		{
+			delete exec_stack[0].next;
+			exec_stack[0].next = nullptr;
+		}
+
+		// position to reset stream to
+		long reset_pos = -1l;
+
+		// unwind stack and destroy any output potentially produced in
+		// stack-frames that will be popped
+		while(!exec_stack.empty())
+		{
+			stack_helper &h = exec_stack[0];
+
+			// repeatable routine => handles error
+			if(h.repeat)
+				break;
+
+			// delete routine-output if already generated and ignore potential
+			// errors due to uninitialized routines
+			try{
+				delete h.r->get_result();
+			}catch(const parser_exception &e){}
+
+			// delete routines
+			delete h.r;
+
+			if(h.next != nullptr)
+				delete h.next;
+
+			// clean up any output that was already produced in this stack-frame
+			if(h.result != nullptr)
+				delete h.result;
+
+			// pop current stack-frame
+			reset_pos = h.stream_marker;
+			exec_stack.pop_front();
+		}
+
+		// reset stream to position before failure
+		if(reset_pos == -1l)
+			throw parser_exception(PARSER, "Failed to derive previous stream-position");
+
+		context.str.seekg(reset_pos, std::wistream::beg);
+	}
+	else
+	{
+		while(!exec_stack.empty())
+		{
+			stack_helper h = exec_stack[0];
+
+			//  current routine will be repeated
+			if(h.repeat)
+				break;
+
+			// current routine has a following routine
+			if(h.next != nullptr)
+			{
+				stack_helper &tmp = exec_stack[0];
+
+				// insert output of current routine and update insertion-position
+				if(tmp.result == nullptr)
+				{
+					tmp.result = tmp.r->get_result();
+					tmp.insert_next = tmp.result;
+				}
+				else
+				{
+					tmp.insert_next->get_next() = tmp.r->get_result();
+					tmp.insert_next = tmp.insert_next->get_next();
+				}
+
+				// update routine-structure
+				tmp.repeat = false;
+				tmp.r = tmp.next;
+				tmp.next = nullptr;
+
+				// stop stack-unwinding, next routine to run found
+				break;
+			}
+
+			//pop stack-frame and update construct output accordingly
+			exec_stack.pop_front();
+			exec_stack[0].r->place_child(h.result);
+
+			delete h.r;	// delete routine of stack-frame (no next-routine present)
+		}
+	}
+}
+
+// TODO nirvana come as you are
+
 dvl::parser::parser(parser_context &context):
 	factory(new parser_routine_factory()),
 	next_child(nullptr),
 	e(nullptr),
-	str(context.str)
+	ex_active(false),
+	context(context)
 {
-	// initialize execution-info
-	root = factory->build_routine(context.builder.get());
-	exec_stack.push_front(stack_helper(root));
+	// helper to make the output useable after the stack got unwound
+	// holds a reference to parser::output
+	class output_helper : public proutine
+	{
+	private:
+		lnstruct *&ln;
+
+		routine *root;
+	public:
+		output_helper(lnstruct *&ln, routine *r) :
+			proutine(pid({ROOT.get_group(), ROOT.get_element(), TYPE_STRUCT})),
+			ln(ln),
+			root(r)
+		{}
+
+		lnstruct *get_result(){ return ln; }
+		void place_child(lnstruct *l) throw(parser_exception){ ln->get_child() = l; }
+		void run(routine_interface &ri) throw(parser_exception){ ri.run_as_child(root); }
+	};
+
+	// check if inputstream is valid
+	validate_istream();
+
+	// initialize execution-info to start with output_helper as base-routine
+	exec_stack.push_front(stack_helper(new output_helper(output, context.builder.get()), context.str.tellg()));
 }
 
 void
 dvl::parser::run()
 	throw(dvl::parser_exception)
 {
-	//TODO clear exception-status upon check
-
 	while(exec_stack.size())
 	{
 		stack_helper &h = exec_stack[0];
 
+		// keep stream-position to enable reseting the stream
+		// upon failure-driven stack-unwinding.
+		h.stream_marker = context.str.tellg();
+
 		// execute routine
 		try{
 			h.r->ri_run(*this);
-		}catch(const parser_exception &e)
+		}catch(const parser_exception &ex)
 		{
-			this->e = e.clone();
+			// check if exception is already stored in exception-status
+			if(&ex != e)
+			{	// only needed if the exception that was caught wasn't caught in a previous stack-frame
+				// clean up old exception if still present
+				if(e != nullptr)
+					delete e;
+
+				// generate copy of caught exception
+				e = ex.clone();
+			}
+
+			ex_active = true;
 
 			// unwind the stack and discard results
-			while(exec_stack.size() && !exec_stack[0].repeat)
-				exec_stack.pop_front();
+			unwind_stack(true);
 
 			// run parent-routine
 			next_child = nullptr;	//reset next_child if set by current routine
@@ -708,32 +852,20 @@ dvl::parser::run()
 			}
 
 			// update execution-info of stackframe
+			delete h.r;
 			h.r = h.next;
 			h.next = nullptr;
 			h.repeat = false;
 		}
 		else
-		{	// no routines to run on the current level
-			// unwind stack until first routine that will be repeated is encountered
-			while(!exec_stack.empty() && !exec_stack[0].repeat)
-			{
-				lnstruct *ln = exec_stack[0].r->get_result();
-				exec_stack.pop_front();
-
-				// place lnstruct
-				exec_stack[0].r->place_child(ln);
-			}
-
-			//TODO preserve result of last routine_run (needs to be kept for backup)
-			// => store transformed root of the execution-graph
-		}
+			unwind_stack();
 	}
 }
 
 dvl::lnstruct*
 dvl::parser::get_output_root()
 {
-	return nullptr;
+	return output->get_child();
 }
 
 void
@@ -745,7 +877,7 @@ dvl::parser::repeat()
 void
 dvl::parser::run_as_next(routine *r)
 {
-	exec_stack[0].r = factory->build_routine(r);
+	exec_stack[0].next = factory->build_routine(r);
 }
 
 void
@@ -758,11 +890,20 @@ void
 dvl::parser::check_child_exception()
 	throw(parser_exception)
 {
-	//TODO
+	if(ex_active)
+	{
+		ex_active = false;	//reset exception-flag
+		throw *e;			//throw exception previously thrown
+	}
 }
 
 void
 dvl::parser::visit(stack_trace_routine &r)
 {
-	//TODO
+	std::wcout << L"Stacktrace" << std::endl;
+
+	//TODO allow formatting in pid_table
+	std::for_each(exec_stack.rbegin(), exec_stack.rend(), [this](stack_helper& h)->void{
+		std::wcout << context.pt.to_string(h.r->get_pid()) << std::endl;
+	});
 }

@@ -2,6 +2,7 @@
 #include "io.hpp"
 
 #include <iostream>
+#include <vector>
 
 void setup_params(int, char**)
 {

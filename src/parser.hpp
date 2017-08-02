@@ -1573,6 +1573,10 @@ namespace dvl
 		pid_table &pt;
 	};
 
+	/**
+	 * The parser does not own the output produced. It must be destroyed separately by
+	 * the routine used to process output of this parser.
+	 */
 	class parser : public routine_interface
 	{
 	private:
@@ -1586,7 +1590,18 @@ namespace dvl
 		struct stack_helper
 		{
 		public:
-			stack_helper(proutine *r): r(r){}
+			/**
+			 * Creates a new stack-helper structure. By default any field but the
+			 * proutine running first within the stack-frame represented by the helper
+			 * will be set to a non-value according to its type by default.
+			 *
+			 * The stream_pos may be set or will be set to -1 by default to mark the
+			 * position as invalid.
+			 */
+			stack_helper(proutine *r, long stream_pos = -1l):
+				stream_marker(stream_pos), r(r){}
+
+			long stream_marker;
 
 			proutine *r;
 
@@ -1599,16 +1614,19 @@ namespace dvl
 			lnstruct *insert_next = nullptr;
 		};
 
+		/**
+		 * Holds stack-frame as queue of stack-helpers. The bottom of the stack
+		 * is equivalent to the front of the queue.
+		 */
 		std::deque<stack_helper> exec_stack;
 
 		parser_routine_factory *factory;
 
+		lnstruct *output;
+
 		proutine *next_child;
 
-		/**
-		 * The root of the parser_tree
-		 */
-		proutine *root;
+		// TODO more efficient way of storing and rethrowing exception than keeping permanent in memory
 
 		/**
 		 * Holds a clone of the last thrown routine that will
@@ -1616,14 +1634,54 @@ namespace dvl
 		 */
 		parser_exception *e;
 
-		std::wistream& str;
+		/**
+		 * If this flag is set to true, the currently held exception is valid for the current
+		 * stack-trace and needs to be handled. Will be reset upon checking the exception
+		 *
+		 * @see e
+		 * @see check_child_exception
+		 */
+		bool ex_active;
+
+		parser_context &context;
 
 		// validates the inputstream
-		bool valid_istream();
-	public:
+		void validate_istream() throw(parser_exception);
+
+		/**
+		 * Unwinds the exec_stack until the next runnable routine is found. If
+		 * called with exception_unwind = true, the stack will be unwound without
+		 * making any potential results permanent. This should be used if a routine
+		 * fails. Calling with exception_unwind = false will unwind the stack and make
+		 * the output of routines in the stack permanent.
+		 *
+		 * Any resources in the stack will be either deallocated or made permanent (lnstructs).
+		 * Any other resources that enter or leave the stack must be deallocated by other means!!!
+		 *
+		 * If exception_unwind is set to true the top-most frame will be assumed to have caused
+		 * the failure and will be popped irrespective of any flags set in the frame.
+		 *
+		 * Will throw a parser-exception if any violations in the stack-structure are
+		 * encountered.
+		 */
+		void unwind_stack(bool exception_unwind = false)
+			throw(parser_exception);
+ 	public:
 		parser(parser_context &context);
 		~parser(){}
 
+		/**
+		 * Runs the parser. Processes the routine-stack and processes
+		 * output of single routines.
+		 *
+		 * TODO use list in docs (<ol>)
+		 * Execution-order of routines in the stack:
+		 * - child-routines
+		 * - routine itself, if repeat-flag is set
+		 * - routine following the active routine
+		 * - routines that are lower in the stack and marked for repetition
+		 * - routines that are lower in the stack and follow routines in the active stacktrace
+		 */
 		void run() throw(parser_exception);
 
 		lnstruct *get_output_root();
@@ -1637,7 +1695,7 @@ namespace dvl
 
 		void check_child_exception() throw(parser_exception);
 
-		std::wistream &get_istream(){ return str; }//TODO
+		std::wistream &get_istream(){ return context.str; }
 
 		void visit(stack_trace_routine &r);
 	};
