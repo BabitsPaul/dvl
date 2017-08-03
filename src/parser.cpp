@@ -650,10 +650,14 @@ dvl::parser::validate_istream()
 	throw(parser_exception)
 {
 	// TODO check if stream passed is readable and has markers enabled.
+
+	if(!context.str)
+		throw parser_exception(PARSER, "Input-stream not open");
 }
 
 void
 dvl::parser::unwind_stack(bool exception_unwind)
+	throw(parser_exception)
 {
 	if(exception_unwind)
 	{
@@ -680,11 +684,9 @@ dvl::parser::unwind_stack(bool exception_unwind)
 			if(h.repeat)
 				break;
 
-			// delete routine-output if already generated and ignore potential
-			// errors due to uninitialized routines
-			try{
+			// delete routine-output if already generated
+			if(h.r->get_result() != nullptr)
 				delete h.r->get_result();
-			}catch(const parser_exception &e){}
 
 			// delete routines
 			delete h.r;
@@ -745,14 +747,24 @@ dvl::parser::unwind_stack(bool exception_unwind)
 
 			//pop stack-frame and update construct output accordingly
 			exec_stack.pop_front();
-			exec_stack[0].r->place_child(h.result);
+			try{
+				exec_stack[0].r->place_child(h.result);
+			}catch(const parser_exception &e)
+			{
+				// set exception-flag to indicate failure
+				this->e = e.clone();
+				ex_active = true;
+
+				// unwind stack to next routine that will handle the failure
+				unwind_stack(true);
+
+				return;
+			}
 
 			delete h.r;	// delete routine of stack-frame (no next-routine present)
 		}
 	}
 }
-
-// TODO nirvana come as you are
 
 dvl::parser::parser(parser_context &context):
 	factory(new parser_routine_factory()),
@@ -788,6 +800,40 @@ dvl::parser::parser(parser_context &context):
 	exec_stack.push_front(stack_helper(new output_helper(output, context.builder.get()), context.str.tellg()));
 }
 
+dvl::parser::~parser()
+{
+	if(!exec_stack.empty())
+	{
+		// abnormal destruction => destroy output
+		delete output;
+
+		while(!exec_stack.empty())
+		{
+			stack_helper &h = exec_stack[0];
+
+			if(h.result != nullptr)
+				delete h.result;
+
+			delete h.r;
+
+			if(h.next != nullptr)
+				delete h.next;
+		}
+	}
+	else
+	{
+		// remove association from this instance to its output and free
+		// container for output
+		output->get_child() = nullptr;
+		delete output->get_child();
+	}
+
+	if(e != nullptr)
+		delete e;	//cleanup old excption stored for rethrowing
+
+	delete factory;	//deallocate parser_routine_factory
+}
+
 void
 dvl::parser::run()
 	throw(dvl::parser_exception)
@@ -796,15 +842,14 @@ dvl::parser::run()
 	{
 		stack_helper &h = exec_stack[0];
 
-		// keep stream-position to enable reseting the stream
-		// upon failure-driven stack-unwinding.
-		h.stream_marker = context.str.tellg();
-
 		// execute routine
 		try{
 			h.r->ri_run(*this);
 		}catch(const parser_exception &ex)
 		{
+			//TODO exception will be propagated via stack-unwinding =>
+			// can't survive multiple loop-repetitions unless rethrown
+
 			// check if exception is already stored in exception-status
 			if(&ex != e)
 			{	// only needed if the exception that was caught wasn't caught in a previous stack-frame
@@ -831,6 +876,10 @@ dvl::parser::run()
 		{	// execute routine placed for child-execution  next
 			exec_stack.push_front(stack_helper(next_child));	// => place routine in stack
 			next_child = nullptr;	// reset next child
+
+			// keep stream-position to enable reseting the stream
+			// upon failure-driven stack-unwinding.
+			exec_stack[0].stream_marker = context.str.tellg();
 		}
 		else if(h.repeat)
 		{

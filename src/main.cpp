@@ -20,10 +20,6 @@ int main(int argc, char *argv[])
 	pid root(5, 5, TYPE_STRUCT),
 			loop(5, 6, TYPE_LOOP);
 
-	std::wcout << L"Root: " << (uint64_t) root << std::endl
-			<< L"Loop: " << (uint64_t) loop << std::endl
-			<< L"Echo: " << (uint64_t) ECHO << std::endl;
-
 	try{
 		routine *c = new echo_routine(L"Child"),
 				*n = new echo_routine(L"Next");
@@ -34,6 +30,12 @@ int main(int argc, char *argv[])
 				by_ptr(c).pop_checkpoint().
 				set_insertion_mode(routine_tree_builder::insertion_mode::AS_NEXT).
 				loop(loop, 1, 4).by_ptr(n);
+
+		pid_table table;
+		parser_context pc(std::wcin, rb, table);
+
+		parser p(pc);
+		p.run();
 	}catch(std::exception& e)
 	{
 		std::cout << "Error: " << e.what() << std::endl;
