@@ -747,19 +747,25 @@ dvl::parser::unwind_stack(bool exception_unwind)
 
 			//pop stack-frame and update construct output accordingly
 			exec_stack.pop_front();
-			try{
-				exec_stack[0].r->place_child(h.result);
-			}catch(const parser_exception &e)
+
+			// only update output if a parent-stackframe is available
+			if(!exec_stack.empty())
 			{
-				// set exception-flag to indicate failure
-				this->e = e.clone();
-				ex_active = true;
+				try{
+					exec_stack[0].r->place_child(h.result);
+				}catch(const parser_exception &e)
+				{
+					// set exception-flag to indicate failure
+					this->e = e.clone();
+					ex_active = true;
 
-				// unwind stack to next routine that will handle the failure
-				unwind_stack(true);
+					// unwind stack to next routine that will handle the failure
+					unwind_stack(true);
 
-				return;
+					return;
+				}
 			}
+
 
 			delete h.r;	// delete routine of stack-frame (no next-routine present)
 		}

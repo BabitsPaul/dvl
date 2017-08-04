@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
 		rb.logic(root).mark_root().push_checkpoint().
 				by_ptr(c).pop_checkpoint().
 				set_insertion_mode(routine_tree_builder::insertion_mode::AS_NEXT).
-				loop(loop, 1, 4).by_ptr(n);
+				by_ptr(n);
 
 		pid_table table;
 		parser_context pc(std::wcin, rb, table);
