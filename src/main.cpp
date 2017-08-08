@@ -1,5 +1,6 @@
 #include "parser.hpp"
 #include "io.hpp"
+#include "test.hpp"
 
 #include <iostream>
 #include <vector>
@@ -17,8 +18,13 @@ int main(int argc, char *argv[])
 
 	init_glob_locale();
 
+	/*
 	pid root(5, 5, TYPE_STRUCT),
 			loop(5, 6, TYPE_LOOP);
+
+	// loop-routine receives nullpointer as child!!!
+	// parser-error???
+	// output corrupted???
 
 	try{
 		routine *c = new echo_routine(L"Child"),
@@ -29,7 +35,7 @@ int main(int argc, char *argv[])
 		rb.logic(root).mark_root().push_checkpoint().
 				by_ptr(c).pop_checkpoint().
 				set_insertion_mode(routine_tree_builder::insertion_mode::AS_NEXT).
-				by_ptr(n);
+				loop(loop, 0, 4).by_ptr(n);
 
 		pid_table table;
 		parser_context pc(std::wcin, rb, table);
@@ -40,6 +46,9 @@ int main(int argc, char *argv[])
 	{
 		std::cout << "Error: " << e.what() << std::endl;
 	}
+	*/
+
+	test_all();
 
 	return 0;
 }

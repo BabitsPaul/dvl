@@ -610,6 +610,17 @@ namespace dvl
 		static std::string lnstruct_premature_insertion(){
 			return "Output not initialized yet - may not insert entity";
 		}
+
+		/**
+		 * Constructs the message for an exception that will be thrown
+		 * upon receiving an unexpected nullpointer.
+		 *
+		 * @param msg additional info for the exception, "" by default
+		 * @return "Nullpointer exception - <msg>"
+		 */
+		static std::string nullptr_error(std::string msg = ""){
+			return "Nullpointer exception - " + msg;
+		}
 	};
 
 	////////////////////////////////////////////////////////////////////////////
@@ -1465,8 +1476,14 @@ namespace dvl
 			 * parents lnstruct. Note that this function will only be called
 			 * if the previous child-routine didn't fail.
 			 *
+			 * This method may throw an exception in case of an invalid insertion.
+			 * E.g. if the routine itself wasn't run yet, or the input is invalid.
+			 * By contract this method must throw an exception if the routine wasn't run
+			 * so far.
+			 *
 			 * @param l the lnstruct to insert
 			 * @throws parser_exception if the lnstruct cant be placed
+			 * @see parser_exception::lnstruct_premature_insertion
 			 */
 			virtual void place_child(lnstruct* l) throw(parser_exception) = 0;
 

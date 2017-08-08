@@ -1,6 +1,7 @@
 #include "parser.hpp"
 
 #include <queue>
+#include <cstdlib>
 
 ////////////////////////////////////////////////////////////////////////////////
 // id
@@ -35,11 +36,13 @@ dvl::pid_table::pid_table()
 // lnstruct
 //
 
-//no-recursively deletes deeply nested structure of lnstructs
+//non-recursively deletes deeply nested structure of lnstructs
 dvl::lnstruct::~lnstruct()
 {
+	//check if free is valid for deallocation of objects
 	std::queue<lnstruct*> q;
-	q.push(this);
+	q.push(next);
+	q.push(child);
 
 	while(!q.empty())
 	{
@@ -52,8 +55,8 @@ dvl::lnstruct::~lnstruct()
 		q.push(ln->next);
 		q.push(ln->child);
 
-		//avoid recursive deletion
-		ln->next = ln->child = nullptr;
+		ln->next = nullptr;
+		ln->child = nullptr;
 
 		delete ln;
 	}
@@ -267,6 +270,8 @@ dvl::routine_tree_builder::get_current()
  */
 struct routine_factory_util
 {
+	//TODO echo_routine: specify output-stream
+
 	//no need to check pids, as these will already be checked by models used to
 	//create implementations
 	friend class dvl::parser_routine_factory;
@@ -303,6 +308,9 @@ struct routine_factory_util
 		void place_child(dvl::lnstruct* l)
 			throw(dvl::parser_exception)
 		{
+			if(base == nullptr)
+				throw dvl::parser_exception(fr->get_pid(), dvl::parser_exception::lnstruct_premature_insertion());
+
 			if(last_success != nullptr)
 				throw dvl::parser_exception(fr->get_pid(), "Found multiple matching definitions");
 
@@ -357,7 +365,7 @@ struct routine_factory_util
 			return ln;
 		}
 
-		void place_child(dvl::lnstruct* l)
+		void place_child(dvl::lnstruct*)
 			throw(dvl::parser_exception)
 		{
 			throw dvl::parser_exception(dvl::EMPTY, dvl::parser_exception::lnstruct_invalid_insertion("emtpy_routine"));
@@ -389,20 +397,23 @@ struct routine_factory_util
 			return ln;
 		}
 
-		void place_child(dvl::lnstruct* ln)
+		void place_child(dvl::lnstruct* c)
 			throw(dvl::parser_exception)
 		{
 			if(insert_pos == nullptr)
 				throw dvl::parser_exception(get_pid(), dvl::parser_exception::lnstruct_premature_insertion());
 
+			if(c == nullptr)
+				throw dvl::parser_exception(get_pid(), dvl::parser_exception::nullptr_error("Child may not be null"));
+
 			//wrap ln into helper to keep next-slot free
-			dvl::lnstruct *helper = new dvl::lnstruct(dvl::LOOP_HELPER, ln->get_start());
-			helper->set_end(ln->get_end());
-			helper->get_child() = ln;
+			dvl::lnstruct *helper = new dvl::lnstruct(dvl::LOOP_HELPER, c->get_start());
+			helper->set_end(c->get_end());
+			helper->get_child() = c;
 
 			//insert helper at next insertion-position
 			*insert_pos = helper;
-			insert_pos = &ln->get_next();
+			insert_pos = &helper->get_next();
 		}
 
 		void run(dvl::routine_interface& ri)
@@ -497,7 +508,7 @@ struct routine_factory_util
 			return ln;
 		}
 
-		void place_child(dvl::lnstruct *l)
+		void place_child(dvl::lnstruct *)
 			throw(dvl::parser_exception)
 		{
 			throw dvl::parser_exception(get_pid(), dvl::parser_exception::lnstruct_invalid_insertion("string_matcher_routine"));
@@ -536,7 +547,7 @@ struct routine_factory_util
 
 		dvl::lnstruct *get_result(){ return ln; }
 
-		void place_child(dvl::lnstruct *l)
+		void place_child(dvl::lnstruct *)
 			throw(dvl::parser_exception)
 		{
 			throw dvl::parser_exception(get_pid(), dvl::parser_exception::lnstruct_invalid_insertion("parser_echo_routine"));
@@ -566,7 +577,7 @@ struct routine_factory_util
 			return ln;
 		}
 
-		void place_child(dvl::lnstruct *l)
+		void place_child(dvl::lnstruct *)
 			throw(dvl::parser_exception)
 		{
 			throw dvl::parser_exception(get_pid(), dvl::parser_exception::lnstruct_invalid_insertion("parser_stack_routine"));
@@ -588,7 +599,7 @@ dvl::parser_routine_factory::parser_routine_factory()
 		return new routine_factory_util::parser_fork_routine((fork_routine*) r);
 	});
 
-	register_transformation(TYPE_EMPTY, [](routine* r)->routine_factory_util::parser_empty_routine*{
+	register_transformation(TYPE_EMPTY, [](routine*)->routine_factory_util::parser_empty_routine*{
 		return new routine_factory_util::parser_empty_routine();
 	});
 
@@ -953,7 +964,7 @@ dvl::parser::check_child_exception()
 }
 
 void
-dvl::parser::visit(stack_trace_routine &r)
+dvl::parser::visit(stack_trace_routine &)
 {
 	std::wcout << L"Stacktrace" << std::endl;
 
