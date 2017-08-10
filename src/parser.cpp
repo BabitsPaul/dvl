@@ -321,7 +321,7 @@ struct routine_factory_util
 			throw(dvl::parser_exception)
 		{
 			// routine runs for the first time
-			if(f_iter == fr->forks().begin())
+			if(base == nullptr)
 				base = new dvl::lnstruct(dvl::routine::get_pid(), ri.get_istream().tellg());
 			else
 			{

@@ -110,7 +110,7 @@ protected:
 		}
 	}
 
-	void assert_throws(std::function<void(void)> f, std::string msg)
+	void assert_throws(std::function<void(void)throw(std::exception)> f, std::string msg)
 	{
 		try{
 			f();
@@ -121,7 +121,7 @@ protected:
 		{}
 	}
 
-	void assert_no_throw(std::function<void(void)> f, std::string msg)
+	void assert_no_throw(std::function<void(void)throw(std::exception)> f, std::string msg)
 	{
 		try{
 			f();
@@ -182,7 +182,7 @@ public:
 		if(e != nullptr && throw_ex)
 		{
 			throw_ex = false;
-			throw e;
+			throw *e;
 		}
 	}
 
@@ -378,21 +378,26 @@ class test_fork_routine : public test_routine
 {
 protected:
 	proutine *pfr;
+
+	dvl::fork_routine *fr;
+	dvl::echo_routine *er;
 public:
 	test_fork_routine(std::string name, std::string description, int child_count):
 		test_routine(name, description, std::wcin)
 	{
-		dvl::echo_routine er(L"Hi");
+		er = new dvl::echo_routine(L"Hi");
 		std::vector<dvl::routine*> routines;
 		for(int i = 0; i < child_count; i++)
-			routines.emplace_back(&er);
-		dvl::fork_routine fr({0l, 0l, dvl::TYPE_FORK}, routines);
-		pfr = factory.build_routine(&fr);
+			routines.emplace_back(er);
+		fr = new dvl::fork_routine({0l, 0l, dvl::TYPE_FORK}, routines);
+		pfr = factory.build_routine(fr);
 	}
 
 	virtual ~test_fork_routine()
 	{
 		delete pfr;
+		delete er;
+		delete fr;
 	}
 };
 
@@ -466,7 +471,7 @@ class test_fork_routine_no_forks : public test_fork_routine
 {
 public:
 	test_fork_routine_no_forks():
-		test_fork_routine("Fork routine normal functionality", "Tests if a fork routine on"
+		test_fork_routine("Fork routine no forks", "Tests if a fork routine on"
 				" without forks terminates with an error", 0)
 	{}
 
@@ -518,8 +523,8 @@ void test_all()
 			new test_routine_child_placement_intime(fork, "fork_routine"),
 			new test_fork_routine_multiple_matches,
 			new test_fork_routine_no_match,
-			new test_fork_routine_normal,
-			new test_fork_routine_no_forks
+			new test_fork_routine_no_forks,
+			new test_fork_routine_normal
 	};
 
 	// run tests
