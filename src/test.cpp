@@ -204,6 +204,16 @@ public:
 		throw_ex = true;
 	}
 
+	void reset_routines()
+	{
+		n = c = nullptr;
+	}
+
+	void reset_repeat_ct()
+	{
+		repeat_ct = 0;
+	}
+
 	int get_repeat_count(){ return repeat_ct; }
 	dvl::routine *get_next(){ return n; }
 	dvl::routine *get_child(){ return c; }
@@ -485,23 +495,94 @@ public:
 // parser_empty_routine
 //
 
-class test_empty_routine_single_run : public test
+class test_empty_routine : public test_routine
 {
-private:
-	proutine *er = nullptr;
+protected:
+	proutine *per = nullptr;
+
+	dvl::empty_routine *er;
+public:
+	test_empty_routine(std::string name, std::string description):
+		test_routine(name, description, std::wcin)
+	{
+		er = new dvl::empty_routine;
+		per = factory.build_routine(er);
+	}
+
+	virtual ~test_empty_routine()
+	{
+		delete er;
+		delete per;
+	}
+};
+
+class test_empty_routine_single_run : public test_empty_routine
+{
 public:
 	test_empty_routine_single_run():
-		test("test_empty_routine_single_run", "Tests if a empty_routine behaves"
+		test_empty_routine("test_empty_routine_single_run", "Tests if a empty_routine behaves"
 				" correctly if run once")
 	{}
 
-	~test_empty_routine_single_run()
+	void run_test()
 	{
-		if(er != nullptr)
-			delete er;
+		assert_no_throw([this]()->void{ per->ri_run(ri); }, "Unexpected failure on first run");
+		assert_equal(nullptr, ri.get_child(), "Echo routine mustnt place child-routine");
+		assert_equal(nullptr, ri.get_next(), "Echo routine mustnt place next-routine");
+		assert_equal(0, ri.get_repeat_count(), "Echo-routines mustnt be repeatable");
 	}
+};
+
+class test_empty_routine_multiple_run : public test_empty_routine
+{
+public:
+	test_empty_routine_multiple_run():
+		test_empty_routine("Test empty_routine multiple run", "Tests if an empty-routine terminates "
+				"with an exception upon running a second time")
+	{}
 
 	void run_test()
+	{
+		assert_no_throw([this]()->void{ per->ri_run(ri); }, "Unexpected failure on first run");
+		assert_throws([this]()->void{ per->ri_run(ri); }, "Echo routine shouldn't allow second run");
+	}
+};
+
+class test_empty_routine_child_placement : public test_empty_routine
+{
+public:
+	test_empty_routine_child_placement():
+		test_empty_routine("Test empty routine child placement", "Test if an empty-routine forbids "
+				"child-placement")
+	{}
+
+	void run_test()
+	{
+		assert_throws([this]()->void{ per->place_child(nullptr); }, "Empty-routine mustnt allow child-placement");
+	}
+};
+
+///////////////////////////////////////////////////////////////////////////////////
+// parser loop routine
+//
+
+class test_loop_routine : public test_routine
+{
+protected:
+	proutine *plr;
+
+	dvl::loop_routine *lr;
+
+	void rebuild_plr()
+	{
+		if(plr != nullptr)
+			delete plr;
+
+		plr = factory.build_routine(lr);
+	}
+public:
+	test_loop_routine(std::string name, std::string description):
+		test_routine(name, description, std::wcin)
 	{
 
 	}
@@ -524,7 +605,12 @@ void test_all()
 			new test_fork_routine_multiple_matches,
 			new test_fork_routine_no_match,
 			new test_fork_routine_no_forks,
-			new test_fork_routine_normal
+			new test_fork_routine_normal,
+
+			// empty routine
+			new test_empty_routine_single_run,
+			new test_empty_routine_multiple_run,
+			new test_empty_routine_child_placement
 	};
 
 	// run tests
