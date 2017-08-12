@@ -369,20 +369,26 @@ class test_routine_child_placement_premature : public test_routine
 {
 protected:
 	proutine *r;
+
+	dvl::lnstruct *ln;
 public:
 	test_routine_child_placement_premature(dvl::routine *r, std::string rname):
 		test_routine(rname + " premature routine placement", "Tests if the routine doesn't"
 				" allow insertion after failure", std::wcin),
-	r(factory.build_routine(r)){}
+		r(factory.build_routine(r))
+	{
+		ln = new dvl::lnstruct(dvl::EMPTY, 0l);
+	}
 
 	~test_routine_child_placement_premature()
 	{
 		delete r;
+		delete ln;
 	}
 
 	void run_test()
 	{
-		assert_throws([this]()->void{ r->ri_place_child(nullptr); }, "Routine mustn't accept a child "
+		assert_throws([this]()->void{ r->ri_place_child(ln); }, "Routine mustn't accept a child "
 				"before it ran");
 	}
 };
@@ -391,22 +397,28 @@ class test_routine_child_placement_intime : public test_routine
 {
 protected:
 	proutine *r;
+
+	dvl::lnstruct *ln;
 public:
 	test_routine_child_placement_intime(dvl::routine *r, std::string rname):
 		test_routine(rname + " child placement in time", "Tests if the routine allows"
 				" inserting a child-element after having run", std::wcin),
-		r(factory.build_routine(r)){}
+		r(factory.build_routine(r))
+	{
+		ln = new dvl::lnstruct(dvl::EMPTY, 0l);
+	}
 
 	~test_routine_child_placement_intime()
 	{
 		delete r;
+		delete ln;
 	}
 
 	void run_test()
 	{
 		r->ri_run(ri);
 
-		assert_no_throw([this]()->void{r->ri_place_child(nullptr);}, "Caught exception on child-insertion");
+		assert_no_throw([this]()->void{r->ri_place_child(ln);}, "Caught exception on child-insertion");
 	}
 };
 
@@ -702,7 +714,7 @@ public:
 		assert_not_equal(ln, nullptr, "routine should produce output");
 		assert_not_equal(ln->get_child(), nullptr, "Missing child-elements of routine");
 		assert_equal(ln->get_next(), nullptr, "Routine shouldn't output following element");
-		assert_not_equal(ln->get_child()->level_count(), 2, "Invalid repetition of loop-elements");
+		assert_equal(ln->get_child()->level_count(), 2, "Invalid repetition of loop-elements");
 		assert_not_equal(ln->get_child()->get_child(), nullptr, "Loop-helper should hold one child-element");
 	}
 };
