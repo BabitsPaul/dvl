@@ -14,6 +14,18 @@
 // test base-class
 //
 
+class assertion_failure : public std::exception
+{
+private:
+	std::string msg;
+public:
+	assertion_failure():
+		msg("assertion failure")
+	{}
+
+	const char *what(){ return msg.c_str(); }
+};
+
 /**
  * Defines a set of basic unit-tests used to ensure that classes
  * run accordingly with their contract.
@@ -74,7 +86,7 @@ public:
 	void failed_with_error(std::string msg)
 	{
 		failure = true;
-		failure_message = msg;
+		failure_message = std::string("Exception caught: ") + msg;
 	}
 protected:
 	/**
@@ -85,32 +97,45 @@ protected:
 	virtual void run_test() = 0;
 
 	template<typename A, typename B>
-	void assert_equal(A a, B b, std::string msg){
+	void assert_equal(A a, B b, std::string msg)
+		throw(assertion_failure)
+	{
 		if(a != b)
 		{
 			failure = true;
 			failure_message = msg;
+
+			throw assertion_failure();
 		}
 	}
 
 	template<typename A, typename B>
-	void assert_not_equal(A a, B b, std::string msg){
+	void assert_not_equal(A a, B b, std::string msg)
+		throw(assertion_failure)
+	{
 		if(a == b)
 		{
 			failure = true;
 			failure_message = msg;
+
+			throw assertion_failure();
 		}
 	}
 
-	void assert_true(bool b, std::string msg){
+	void assert_true(bool b, std::string msg)
+		throw(assertion_failure)
+	{
 		if(!b)
 		{
 			failure = true;
 			failure_message = msg;
+
+			throw assertion_failure();
 		}
 	}
 
 	void assert_throws(std::function<void(void)throw(std::exception)> f, std::string msg)
+		throw(assertion_failure)
 	{
 		try{
 			f();
@@ -119,6 +144,9 @@ protected:
 			failure_message = msg;
 		}catch(...)
 		{}
+
+		if(failure)
+			throw assertion_failure();
 	}
 
 	void assert_no_throw(std::function<void(void)throw(std::exception)> f, std::string msg)
@@ -129,6 +157,8 @@ protected:
 		{
 			failure = true;
 			failure_message = msg;
+
+			throw assertion_failure();
 		}
 	}
 };
@@ -572,6 +602,7 @@ protected:
 	proutine *plr;
 
 	dvl::loop_routine *lr;
+	dvl::empty_routine *er;
 
 	void rebuild_plr()
 	{
@@ -582,9 +613,176 @@ protected:
 	}
 public:
 	test_loop_routine(std::string name, std::string description):
+		test_routine(name, description, std::wcin),
+		plr(nullptr)
+	{
+		er = new dvl::empty_routine;
+		lr = new dvl::loop_routine({0l, 0l, dvl::TYPE_LOOP}, er);
+		rebuild_plr();
+	}
+
+	virtual ~test_loop_routine()
+	{
+		delete er;
+		delete lr;
+		delete plr;
+	}
+};
+
+class test_loop_routine_failure_min_iter : public test_loop_routine
+{
+private:
+	dvl::lnstruct *ln;
+public:
+	test_loop_routine_failure_min_iter():
+		test_loop_routine("Test loop routine success", "Tests if a loop-routine behaves correctly "
+				"if invoked correctly")
+	{
+		lr->set_min_iterations(3);
+		rebuild_plr();
+
+		ln = new dvl::lnstruct(dvl::EMPTY, 0l);
+	}
+
+	~test_loop_routine_failure_min_iter()
+	{
+		delete ln;
+	}
+
+	void run_test()
+	{
+		assert_no_throw([this](){
+			plr->ri_run(ri);
+			plr->place_child(ln);
+			plr->ri_run(ri);
+		}, "Unexpected failure on valid run");
+
+		ri.throw_on_next_run(dvl::parser_exception(dvl::EMPTY, "whatever"));
+
+		assert_throws([this](){ plr->ri_run(ri); }, "Loop routine should terminate premature");
+	}
+};
+
+class test_loop_routine_success_min_iter : public test_loop_routine
+{
+private:
+	dvl::lnstruct *ln;
+public:
+	test_loop_routine_success_min_iter():
+		test_loop_routine("test loop routine success min iter", "Tests if a loop-routine behaves "
+				"properly if terminated after minimum no of runs")
+	{
+		ln = new dvl::lnstruct(dvl::EMPTY, 0l);
+
+		lr->set_min_iterations(2);
+		rebuild_plr();
+	}
+
+	~test_loop_routine_success_min_iter()
+	{
+		delete ln;
+	}
+
+	void run_test()
+	{
+		assert_no_throw([this](){ plr->ri_run(ri); }, "Unexpected failure on first run");
+		assert_equal(nullptr, ri.get_next(), "Shouldn't place next routine");
+		assert_not_equal(nullptr, ri.get_child(), "Should place child-routine");
+		assert_no_throw([this](){ plr->place_child(ln); }, "Unexpected failure on placement of first element");
+		assert_no_throw([this](){ plr->ri_run(ri); }, "Unexpected failure on second run");
+		assert_no_throw([this](){ plr->place_child(ln); }, "Unexpected failure on placement of second element");
+
+		ri.throw_on_next_run(dvl::parser_exception(dvl::EMPTY, "whatever"));
+
+		assert_no_throw([this](){ plr->ri_run(ri); }, "Routine should terminate successful despite failure of child-routine");
+		assert_throws([this](){ plr->ri_run(ri); }, "Should fail after terminating");
+
+		// check output
+		dvl::lnstruct *ln = plr->get_result();
+		assert_not_equal(ln, nullptr, "routine should produce output");
+		assert_not_equal(ln->get_child(), nullptr, "Missing child-elements of routine");
+		assert_equal(ln->get_next(), nullptr, "Routine shouldn't output following element");
+		assert_not_equal(ln->get_child()->level_count(), 2, "Invalid repetition of loop-elements");
+		assert_not_equal(ln->get_child()->get_child(), nullptr, "Loop-helper should hold one child-element");
+	}
+};
+
+// TODO test-granularity: test state-details in each test
+
+class test_loop_routine_success_intermediate_iter : public test_loop_routine
+{
+public:
+	test_loop_routine_success_intermediate_iter():
+		test_loop_routine("test loop routine success intermediate iter", "Tests if the routine behaves "
+				"correctly if the element terminates in the middle of the entity")
+	{
+		lr->set_min_iterations(3);
+		lr->set_max_iterations(6);
+		rebuild_plr();
+	}
+
+	void run_test()
+	{
+		assert_no_throw([this](){
+			for(int i = 0; i < 4; i++)
+				plr->ri_run(ri);
+		}, "Unexpected failure in loop-routine");
+
+		ri.throw_on_next_run(dvl::parser_exception(dvl::EMPTY, "whatever"));
+
+		assert_no_throw([this](){ plr->ri_run(ri); }, "Should terminate entity successful");
+		assert_not_equal(plr->get_result(), nullptr, "Routine should produce valid output");
+	}
+};
+
+class test_loop_routine_success_last_iter : public test_loop_routine
+{
+public:
+	test_loop_routine_success_last_iter():
+		test_loop_routine("test loop routine success last iter", "Tests if the loop-routine behaves "
+				"correctly, if the entity terminates on the last run (max elements)")
+	{
+		lr->set_max_iterations(3);
+		lr->set_min_iterations(0);
+		rebuild_plr();
+	}
+
+	void run_test()
+	{
+		assert_no_throw([this](){
+			for(int i = 0; i < 3; i++)
+				plr->ri_run(ri);
+		}, "Unexpected failure, 4 repetitions allowed on 3-entity routine");
+
+		assert_throws([this](){ plr->ri_run(ri); }, "Shouldn't allow third repetition");
+	}
+};
+
+///////////////////////////////////////////////////////////////////////////////////
+// logic-routine
+//
+
+class test_logic_routine : public test_routine
+{
+protected:
+	proutine *plr;
+
+	dvl::routine *er;
+	dvl::struct_routine *lr;
+public:
+	test_logic_routine(std::string name, std::string description):
 		test_routine(name, description, std::wcin)
 	{
+		er = new dvl::empty_routine;
+		lr = new dvl::struct_routine({0l, 0l, dvl::TYPE_STRUCT}, er, er);
+		plr = factory.build_routine(lr);
+	}
 
+	virtual ~test_logic_routine()
+	{
+		delete er;
+		delete lr;
+		delete plr;
 	}
 };
 
@@ -596,6 +794,7 @@ void test_all()
 {
 	dvl::routine *echo = new dvl::echo_routine(L"Hi");
 	dvl::routine *fork = new dvl::fork_routine({0l, 0l, dvl::TYPE_FORK}, {echo, echo});
+	dvl::routine *loop = new dvl::loop_routine({0l, 0l, dvl::TYPE_LOOP}, echo);
 
 	std::vector<test*> tests = {
 			// fork_routine
@@ -610,31 +809,50 @@ void test_all()
 			// empty routine
 			new test_empty_routine_single_run,
 			new test_empty_routine_multiple_run,
-			new test_empty_routine_child_placement
+			new test_empty_routine_child_placement,
+
+			// loop routine
+			new test_routine_result_stable(loop, "loop_routine"),
+			new test_routine_child_placement_premature(loop, "loop_routine"),
+			new test_routine_child_placement_intime(loop, "loop_routine"),
+			new test_loop_routine_failure_min_iter,
+			new test_loop_routine_success_min_iter,
+			new test_loop_routine_success_intermediate_iter,
+			new test_loop_routine_success_last_iter
 	};
 
 	// run tests
-	std::for_each(tests.begin(), tests.end(), [](test *t)->void
+	int failure_ct = 0;
+
+	std::for_each(tests.begin(), tests.end(), [&failure_ct](test *t)->void
 	{
-		std::cout << "Testing " << std::setw(40) << t->get_name();
+		std::cout << "Testing " << std::setw(50) << t->get_name();
 
 		try{
 			t->run();
 		}
+		catch(assertion_failure &af){ std::cout << "\nassertion failure" << std::endl; }
 		catch(dvl::parser_exception &e){	t->failed_with_error(e.what()); }
 		catch(std::exception &e){ t->failed_with_error(e.what()); }
 		catch(...){	t->failed_with_error("Unknown error"); }
 
 		if(t->failed())
+		{
 			std::cout << " Failed\nDescription: " << t->get_description() << "\nCause: "
 						<< t->get_error_message() << "\n" << std::endl;
+
+			failure_ct++;
+		}
 		else
 			std::cout << " Success" << std::endl;
 	});
 
+	std::cout << "Total failures: " << failure_ct << std::endl;
+
 	// clean up
 	delete echo;
 	delete fork;
+	delete loop;
 	std::for_each(tests.begin(), tests.end(), [](test *t)->void{ delete t; });
 }
 

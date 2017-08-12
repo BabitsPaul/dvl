@@ -720,7 +720,7 @@ namespace dvl
 		 *
 		 * @param indent the indent used for this structure (child-structure will receive indent + "\t")
 		 */
-		std::wstring structure(pid_table &pt, std::wstring indent=L"")
+		std::wstring structure(pid_table &pt, std::wstring indent=L"") const
 		{
 			// TODO purpose???
 			// if(this == nullptr)
@@ -741,6 +741,31 @@ namespace dvl
 
 			return result;
 		}
+
+		/**
+		 * Counts the total number of lnstructs that are on the same level with
+		 * this lnstruct and follow it. Counts the number of next elements that are
+		 * not null.
+		 *
+		 * @return the number of elements on the same level as this node
+		 */
+		int level_count() const;
+
+		/**
+		 * Calculates the total number of lnstructs within the tree of lnstructs
+		 * that has this node as root.
+		 *
+		 * @return number of nodes in the subtree that has this routine as root
+		 */
+		int total_count() const;
+
+		/**
+		 * Calculates the height of this tree as the number of nodes "vertically above"
+		 * this node.
+		 *
+		 * @return the height of the subtree
+		 */
+		int height() const;
 	};
 
 	////////////////////////////////////////////////////////////////////////////
@@ -913,7 +938,7 @@ namespace dvl
 	 * Represents a simple structural-routine used to build a syntax-tree of single
 	 * routines.
 	 */
-	class logic_routine : public routine
+	class struct_routine : public routine
 	{
 	private:
 		/**
@@ -928,7 +953,7 @@ namespace dvl
 		 *
 		 * @throws parser_exception if an invalid pid was passed
 		 */
-		logic_routine(pid id, routine *child, routine *next):
+		struct_routine(pid id, routine *child, routine *next):
 			routine(id), c(child), n(next){
 			if(id.get_type() != TYPE_STRUCT)
 				throw parser_exception(PARSER, parser_exception::invalid_pid("logic_routine"));
@@ -1778,6 +1803,22 @@ namespace dvl
 
 		void run_as_child(routine *r);
 
+		/**
+		 * Checks if the child-routine threw an exception. This method won't throw if either
+		 * non of the child-routines threw an exception or no child-routines existed. If
+		 * a child threw an exception, this method will rethrow the exception.
+		 *
+		 * If this method throws an exception the output of all child-routines will
+		 * be deallocated and can't be used.
+		 *
+		 * By contract if this method doesn't throw an exception, place_child will be
+		 * called and vice versa.
+		 *
+		 * @throws parser_exception if a child-routine failed.
+		 * @see unwind
+		 * @see parser_exception
+		 * @see parser_routine_factory::parser_routine::place_child
+		 */
 		void check_child_exception() throw(parser_exception);
 
 		std::wistream &get_istream(){ return context.str; }

@@ -62,6 +62,81 @@ dvl::lnstruct::~lnstruct()
 	}
 }
 
+int
+dvl::lnstruct::level_count()
+	const
+{
+	lnstruct *ln = const_cast<lnstruct*>(this);
+	int ct = 0;
+
+	while(ln != nullptr)
+	{
+		ct++;
+		ln = ln->get_next();
+	}
+
+	return ct;
+}
+
+int
+dvl::lnstruct::height()
+	const
+{
+	lnstruct *ln = const_cast<lnstruct*>(this);
+	int ct = 0;
+
+	while(ln != nullptr)
+	{
+		ct++;
+		ln = ln->get_child();
+	}
+
+	return ct;
+}
+
+int
+dvl::lnstruct::total_count()
+	const
+{
+	std::stack<lnstruct*> st;
+	st.push(const_cast<lnstruct*>(this));
+
+	int ct = 0;
+
+	while(!st.empty())
+	{
+		if(st.top()->get_child() != nullptr)
+			st.push(st.top()->get_child());
+		else if(st.top()->get_next() != nullptr)
+		{
+			lnstruct *n = st.top()->get_next();
+			st.pop();
+			st.push(n);
+
+			ct++;
+		}
+		else
+		{
+			while(!st.empty() && st.top()->get_next() == nullptr)
+			{
+				st.pop();
+				ct++;
+			}
+
+			if(!st.empty())
+			{
+				lnstruct *tmp = st.top();
+				st.pop();
+				st.push(tmp->get_next());
+
+				ct++;
+			}
+		}
+	}
+
+	return ct;
+}
+
 /////////////////////////////////////////////////////////////////////////////////
 // tree builder
 //
@@ -93,13 +168,13 @@ dvl::routine_tree_builder::insert_node(routine *rn)
 			if(r->get_pid().get_type() != TYPE_STRUCT)
 				throw parser_exception(PARSER, parser_exception::ptree_builder_invalid_routine());
 
-			((logic_routine*) r)->set_child(rn);
+			((struct_routine*) r)->set_child(rn);
 			break;
 		case insertion_mode::AS_NEXT:
 			if(r->get_pid().get_type() != TYPE_STRUCT)
 				throw parser_exception(PARSER, parser_exception::ptree_builder_invalid_routine());
 
-			((logic_routine*) r)->set_next(rn);
+			((struct_routine*) r)->set_next(rn);
 			break;
 		case insertion_mode::AS_FORK:
 			if(r->get_pid().get_type() != TYPE_FORK)
@@ -224,7 +299,7 @@ dvl::routine_tree_builder::fork(pid id)
 dvl::routine_tree_builder&
 dvl::routine_tree_builder::logic(pid id)
 {
-	routine *rn = new logic_routine(id, nullptr, nullptr);
+	routine *rn = new struct_routine(id, nullptr, nullptr);
 	insert_node(rn);
 
 	ins_mode = insertion_mode::AS_CHILD;
@@ -440,10 +515,11 @@ struct routine_factory_util
 					return;
 			}
 
-			// maximum iterations count reached -> terminate
-			if(run_ct == r->get_max_iterations() &&
+			// maximum iterations count reached -> run child once, then terminate
+			if(run_ct + 1 == r->get_max_iterations() &&
 				r->get_max_iterations() != dvl::loop_routine::_INFINITY)
 			{
+				ri.run_as_child(r->get_loop());
 				return;
 			}
 
@@ -456,11 +532,11 @@ struct routine_factory_util
 	class parser_logic_routine : public base_routine
 	{
 	private:
-		dvl::logic_routine *r;
+		dvl::struct_routine *r;
 
 		dvl::lnstruct *ln;
 	public:
-		parser_logic_routine(dvl::logic_routine *r): base_routine(r->get_pid()),
+		parser_logic_routine(dvl::struct_routine *r): base_routine(r->get_pid()),
 			r(r), ln(nullptr)
 		{}
 
@@ -608,7 +684,7 @@ dvl::parser_routine_factory::parser_routine_factory()
 	});
 
 	register_transformation(TYPE_STRUCT, [](routine *r)->routine_factory_util::parser_logic_routine*{
-		return new routine_factory_util::parser_logic_routine((logic_routine*) r);
+		return new routine_factory_util::parser_logic_routine((struct_routine*) r);
 	});
 
 	register_transformation(TYPE_INTERNAL, [](routine *r)->parser_routine_factory::parser_routine*{
