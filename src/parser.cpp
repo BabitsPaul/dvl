@@ -478,9 +478,6 @@ struct routine_factory_util
 			if(insert_pos == nullptr)
 				throw dvl::parser_exception(get_pid(), dvl::parser_exception::lnstruct_premature_insertion());
 
-			if(c == nullptr)
-				throw dvl::parser_exception(get_pid(), dvl::parser_exception::nullptr_error("Child may not be null"));
-
 			//wrap ln into helper to keep next-slot free
 			dvl::lnstruct *helper = new dvl::lnstruct(dvl::LOOP_HELPER, c->get_start());
 			helper->set_end(c->get_end());
@@ -839,7 +836,7 @@ dvl::parser::unwind_stack(bool exception_unwind)
 			if(!exec_stack.empty())
 			{
 				try{
-					exec_stack[0].r->place_child(h.result);
+					exec_stack[0].r->ri_place_child(h.result);
 				}catch(const parser_exception &e)
 				{
 					// set exception-flag to indicate failure

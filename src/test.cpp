@@ -382,7 +382,7 @@ public:
 
 	void run_test()
 	{
-		assert_throws([this]()->void{ r->place_child(nullptr); }, "Routine mustn't accept a child "
+		assert_throws([this]()->void{ r->ri_place_child(nullptr); }, "Routine mustn't accept a child "
 				"before it ran");
 	}
 };
@@ -406,7 +406,7 @@ public:
 	{
 		r->ri_run(ri);
 
-		assert_no_throw([this]()->void{r->place_child(nullptr);}, "Caught exception on child-insertion");
+		assert_no_throw([this]()->void{r->ri_place_child(nullptr);}, "Caught exception on child-insertion");
 	}
 };
 
@@ -455,8 +455,8 @@ public:
 
 		helper_routine_interface h(std::wcin);
 		pfr->ri_run(h);
-		pfr->place_child(&ln);
-		assert_throws([this, &ln]()->void{ pfr->place_child(&ln);}, "Fork-routine shouldn't "
+		pfr->ri_place_child(&ln);
+		assert_throws([this, &ln]()->void{ pfr->ri_place_child(&ln);}, "Fork-routine shouldn't "
 				" allow multiple matching definitions");
 	}
 };
@@ -496,7 +496,7 @@ public:
 		assert_equal(ri.get_next(), nullptr, "Incorrect next routine");									//check run_as_next
 		ri.throw_on_next_run(dvl::parser_exception(dvl::ECHO, "failure"));								//emulate throwing exception in echo_routine
 		assert_no_throw([this]()->void{ pfr->ri_run(ri); }, "Unexpected failure in ri_run");		//second run
-		assert_no_throw([this, ln]()->void{ pfr->place_child(ln); }, "Failed to place child");			//emulate successful run (place_child)
+		assert_no_throw([this, ln]()->void{ pfr->ri_place_child(ln); }, "Failed to place child");			//emulate successful run (place_child)
 		ri.throw_on_next_run(dvl::parser_exception(dvl::ECHO, "failure"));								//emulate errornous run of child-routine
 		assert_no_throw([this](){ pfr->ri_run(ri); }, "Unexpected failure in ri_run");				//third run
 		ri.throw_on_next_run(dvl::parser_exception(dvl::ECHO, "failure"));								//emulate errornous run of child-routine
@@ -588,7 +588,7 @@ public:
 
 	void run_test()
 	{
-		assert_throws([this]()->void{ per->place_child(nullptr); }, "Empty-routine mustnt allow child-placement");
+		assert_throws([this]()->void{ per->ri_place_child(nullptr); }, "Empty-routine mustnt allow child-placement");
 	}
 };
 
@@ -653,7 +653,7 @@ public:
 	{
 		assert_no_throw([this](){
 			plr->ri_run(ri);
-			plr->place_child(ln);
+			plr->ri_place_child(ln);
 			plr->ri_run(ri);
 		}, "Unexpected failure on valid run");
 
@@ -688,9 +688,9 @@ public:
 		assert_no_throw([this](){ plr->ri_run(ri); }, "Unexpected failure on first run");
 		assert_equal(nullptr, ri.get_next(), "Shouldn't place next routine");
 		assert_not_equal(nullptr, ri.get_child(), "Should place child-routine");
-		assert_no_throw([this](){ plr->place_child(ln); }, "Unexpected failure on placement of first element");
+		assert_no_throw([this](){ plr->ri_place_child(ln); }, "Unexpected failure on placement of first element");
 		assert_no_throw([this](){ plr->ri_run(ri); }, "Unexpected failure on second run");
-		assert_no_throw([this](){ plr->place_child(ln); }, "Unexpected failure on placement of second element");
+		assert_no_throw([this](){ plr->ri_place_child(ln); }, "Unexpected failure on placement of second element");
 
 		ri.throw_on_next_run(dvl::parser_exception(dvl::EMPTY, "whatever"));
 
@@ -783,6 +783,19 @@ public:
 		delete er;
 		delete lr;
 		delete plr;
+	}
+};
+
+class test_logic_routine_normal_run : public test_logic_routine
+{
+public:
+	test_logic_routine_normal_run():
+		test_logic_routine("test logic routine normal run", "Tests")
+	{}
+
+	void run_test()
+	{
+		assert_no_throw([this](){ plr->ri_run(ri); }, "Logic routine should allow single run");
 	}
 };
 

@@ -1476,8 +1476,17 @@ namespace dvl
 			 * @see ri_run
 			 */
 			bool legal_run;
+
+			/**
+			 * Flag to determine whether an insertion is legal. There may be exactly one child
+			 * placed per run. This flag is used to prevent further placements.
+			 *
+			 * @see place_child
+			 * @see ri_run
+			 */
+			bool legal_insert;
 		public:
-			parser_routine(pid id): routine(id), legal_run(true){}
+			parser_routine(pid id): routine(id), legal_run(true), legal_insert(false){}
 
 			virtual ~parser_routine(){}
 
@@ -1496,6 +1505,7 @@ namespace dvl
 			 */
 			virtual lnstruct* get_result() = 0;
 
+		protected:
 			/**
 			 * Callback to place the lnstruct produced by the child in the
 			 * parents lnstruct. Note that this function will only be called
@@ -1520,6 +1530,7 @@ namespace dvl
 			 */
 			virtual void run(routine_interface &ri) throw(parser_exception) = 0;
 
+		public:
 			/**
 			 * Called by the routine_interface to run this routine. This method
 			 * will check the legal_run method to assert the routine won't be used
@@ -1537,8 +1548,32 @@ namespace dvl
 					throw parser_exception(get_pid(), parser_exception::routine_invalid_repeat());
 
 				legal_run = false;
+				legal_insert = true;
 
 				run(ri);
+			}
+
+			/**
+			 * Called by the routine-interface to place a child-element. Prevents
+			 * repetitive/invalid calls of place_child. I.e. at most one child-element
+			 * may be placed in this routine per call to run. It is not allowed to insert
+			 * a nullptr as child, as this would possibly break the output-tree apart.
+			 *
+			 * @see place_child
+			 * @see legal_insert
+			 */
+			void ri_place_child(lnstruct *l)
+				throw(parser_exception)
+			{
+				if(!legal_insert)
+					throw parser_exception(get_pid(), parser_exception::lnstruct_invalid_insertion("routine"));
+
+				if(l == nullptr)
+					throw dvl::parser_exception(get_pid(), dvl::parser_exception::nullptr_error("Child may not be null"));
+
+				legal_insert = false;
+
+				place_child(l);
 			}
 
 		protected:
@@ -1557,6 +1592,22 @@ namespace dvl
 
 				legal_run = true;
 			}
+
+			/**
+			 * Returns true if the current run is valid. I.e. if it is either the first run, or
+			 * the last run called repeat.
+			 *
+			 * @return true if the run is valid
+			 * @see legal_run
+			 * @see repeat
+			 */
+			bool valid_run()
+			{
+				return legal_run;
+			}
+
+			// TODO flag to indicate whether an insertion is valid + ensure valid insertion
+			// in place_child
 		};
 
 		/**
