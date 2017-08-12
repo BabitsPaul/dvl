@@ -774,7 +774,7 @@ public:
 // logic-routine
 //
 
-class test_logic_routine : public test_routine
+class test_struct_routine : public test_routine
 {
 protected:
 	proutine *plr;
@@ -782,7 +782,7 @@ protected:
 	dvl::routine *er;
 	dvl::struct_routine *lr;
 public:
-	test_logic_routine(std::string name, std::string description):
+	test_struct_routine(std::string name, std::string description):
 		test_routine(name, description, std::wcin)
 	{
 		er = new dvl::empty_routine;
@@ -790,7 +790,7 @@ public:
 		plr = factory.build_routine(lr);
 	}
 
-	virtual ~test_logic_routine()
+	virtual ~test_struct_routine()
 	{
 		delete er;
 		delete lr;
@@ -798,16 +798,19 @@ public:
 	}
 };
 
-class test_logic_routine_normal_run : public test_logic_routine
+class test_struct_routine_normal_run : public test_struct_routine
 {
 public:
-	test_logic_routine_normal_run():
-		test_logic_routine("test logic routine normal run", "Tests")
+	test_struct_routine_normal_run():
+		test_struct_routine("test struct routine normal run", "Tests if the struct-routine"
+				" behaves correctly on a successful run")
 	{}
 
 	void run_test()
 	{
-		assert_no_throw([this](){ plr->ri_run(ri); }, "Logic routine should allow single run");
+		assert_no_throw([this](){ plr->ri_run(ri); }, "struct routine should allow single run");
+		assert_equal(ri.get_next(), er, "Invalid next routine");
+		assert_equal(ri.get_child(), er, "Invalid child routine");
 	}
 };
 
@@ -820,6 +823,7 @@ void test_all()
 	dvl::routine *echo = new dvl::echo_routine(L"Hi");
 	dvl::routine *fork = new dvl::fork_routine({0l, 0l, dvl::TYPE_FORK}, {echo, echo});
 	dvl::routine *loop = new dvl::loop_routine({0l, 0l, dvl::TYPE_LOOP}, echo);
+	dvl::routine *structr = new dvl::struct_routine({0l, 0l, dvl::TYPE_STRUCT}, echo, echo);
 
 	std::vector<test*> tests = {
 			// fork_routine
@@ -843,7 +847,12 @@ void test_all()
 			new test_loop_routine_failure_min_iter,
 			new test_loop_routine_success_min_iter,
 			new test_loop_routine_success_intermediate_iter,
-			new test_loop_routine_success_last_iter
+			new test_loop_routine_success_last_iter,
+
+			// logic routine
+			new test_routine_child_placement_premature(structr, "struct_routine"),
+			new test_routine_child_placement_intime(structr, "struct_routine"),
+			new test_struct_routine_normal_run
 	};
 
 	// run tests
