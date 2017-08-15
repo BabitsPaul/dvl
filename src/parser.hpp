@@ -766,6 +766,8 @@ namespace dvl
 		 * @return the height of the subtree
 		 */
 		int height() const;
+
+		bool is_tree() const;
 	};
 
 	////////////////////////////////////////////////////////////////////////////
@@ -1018,16 +1020,24 @@ namespace dvl
 		 * The message this routine displays when run.
 		 */
 		std::wstring msg;
+
+		/**
+		 * A reference to the stream to which the routine will output its
+		 * message
+		 */
+		std::wostream &str;
 	public:
 		/**
 		 * Constructs a new echo_routine with the specified message that will be
-		 * displayed if the routine is run. The pid of the routine will be initialized
+		 * printed if the routine is run. The pid of the routine will be initialized
 		 * as ECHO (not overrideable).
 		 *
 		 * @param s the routine to run
+		 * @param str the stream to print to
 		 * @see ECHO
 		 */
-		echo_routine(std::wstring s) : routine(ECHO), msg(s){};
+		echo_routine(std::wstring s, std::wostream &str = std::wcout):
+			routine(ECHO), msg(s), str(str){};
 
 		/**
 		 * Getter for the message associated with this routine
@@ -1036,6 +1046,15 @@ namespace dvl
 		 * @see msg
 		 */
 		const std::wstring& get_msg(){ return msg; }
+
+		/**
+		 * Getter for the stream to which this routine will output
+		 * its message.
+		 *
+		 * @return the stream to which this routine should output
+		 * @see str
+		 */
+		std::wostream &get_stream(){ return str; }
 	};
 
 	/////////////////////////////////////////////////////////////////////////////////
@@ -1605,9 +1624,6 @@ namespace dvl
 			{
 				return legal_run;
 			}
-
-			// TODO flag to indicate whether an insertion is valid + ensure valid insertion
-			// in place_child
 		};
 
 		/**
@@ -1649,7 +1665,7 @@ namespace dvl
 	};
 
 	//////////////////////////////////////////////////////////////////////////////////
-	// parser
+	// parser context
 	//
 
 	/**
@@ -1684,6 +1700,10 @@ namespace dvl
 		 */
 		pid_table &pt;
 	};
+
+	///////////////////////////////////////////////////////////////////////////////////
+	// parser
+	//
 
 	/**
 	 * The parser does not own the output produced. It must be destroyed separately by

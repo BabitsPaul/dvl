@@ -18,7 +18,6 @@ int main(int argc, char *argv[])
 
 	init_glob_locale();
 
-	/*
 	pid root(5, 5, TYPE_STRUCT),
 			loop(5, 6, TYPE_LOOP);
 
@@ -46,9 +45,8 @@ int main(int argc, char *argv[])
 	{
 		std::cout << "Error: " << e.what() << std::endl;
 	}
-	*/
 
-	test_all();
+	// test_all();
 
 	return 0;
 }

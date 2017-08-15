@@ -2,6 +2,7 @@
 
 #include <queue>
 #include <cstdlib>
+#include <set>
 
 ////////////////////////////////////////////////////////////////////////////////
 // id
@@ -39,6 +40,10 @@ dvl::pid_table::pid_table()
 //non-recursively deletes deeply nested structure of lnstructs
 dvl::lnstruct::~lnstruct()
 {
+	// TODO no repeated deallocations, no deletion of unallocated objects,but SIGSEGV
+	// use separate manager for output with stack as shared instance
+
+	/*
 	//check if free is valid for deallocation of objects
 	std::queue<lnstruct*> q;
 	q.push(next);
@@ -58,8 +63,16 @@ dvl::lnstruct::~lnstruct()
 		ln->next = nullptr;
 		ln->child = nullptr;
 
-		delete ln;
+		delete ln;	// TODO causes SIGSEGV
 	}
+	*/
+
+	// doesn't work either => wrong linkage
+	if(next != nullptr)
+		delete next;
+
+	if(child != nullptr)
+		delete child;
 }
 
 int
@@ -135,6 +148,33 @@ dvl::lnstruct::total_count()
 	}
 
 	return ct;
+}
+
+bool
+dvl::lnstruct::is_tree()
+	const
+{
+	std::set<lnstruct*> s;
+	std::stack<lnstruct*> st;
+	st.push(const_cast<lnstruct*>(this));
+
+	while(!st.empty())
+	{
+		lnstruct *ln = st.top();
+
+		if(s.find(ln) != s.end())
+			return false;
+
+		s.emplace(ln);
+
+		if(ln->get_child() != nullptr)
+			st.push(ln->get_child());
+
+		if(ln->get_next() != nullptr)
+			st.push(ln->get_next());
+	}
+
+	return true;
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -345,8 +385,6 @@ dvl::routine_tree_builder::get_current()
  */
 struct routine_factory_util
 {
-	//TODO echo_routine: specify output-stream
-
 	//no need to check pids, as these will already be checked by models used to
 	//create implementations
 	friend class dvl::parser_routine_factory;
@@ -526,14 +564,14 @@ struct routine_factory_util
 		}
 	};
 
-	class parser_logic_routine : public base_routine
+	class parser_struct_routine : public base_routine
 	{
 	private:
 		dvl::struct_routine *r;
 
 		dvl::lnstruct *ln;
 	public:
-		parser_logic_routine(dvl::struct_routine *r): base_routine(r->get_pid()),
+		parser_struct_routine(dvl::struct_routine *r): base_routine(r->get_pid()),
 			r(r), ln(nullptr)
 		{}
 
@@ -612,10 +650,10 @@ struct routine_factory_util
 	private:
 		dvl::lnstruct *ln;
 
-		const std::wstring& str;
+		dvl::echo_routine *er;
 	public:
 		parser_echo_routine(dvl::echo_routine *r) : base_routine(r->get_pid()),
-			ln(nullptr), str(r->get_msg())
+			ln(nullptr), er(r)
 		{}
 
 		dvl::lnstruct *get_result(){ return ln; }
@@ -631,7 +669,7 @@ struct routine_factory_util
 		{
 			ln = new dvl::lnstruct(get_pid(), ri.get_istream().tellg());
 
-			std::wcout << str << std::endl;
+			er->get_stream() << er->get_msg() << std::endl;
 		}
 	};
 
@@ -680,8 +718,8 @@ dvl::parser_routine_factory::parser_routine_factory()
 		return new routine_factory_util::parser_loop_routine((loop_routine*) r);
 	});
 
-	register_transformation(TYPE_STRUCT, [](routine *r)->routine_factory_util::parser_logic_routine*{
-		return new routine_factory_util::parser_logic_routine((struct_routine*) r);
+	register_transformation(TYPE_STRUCT, [](routine *r)->routine_factory_util::parser_struct_routine*{
+		return new routine_factory_util::parser_struct_routine((struct_routine*) r);
 	});
 
 	register_transformation(TYPE_INTERNAL, [](routine *r)->parser_routine_factory::parser_routine*{
@@ -932,6 +970,9 @@ dvl::parser::run()
 	{
 		stack_helper &h = exec_stack[0];
 
+		// if repeat-flag wasn't set this is the first run of the routine
+		bool first_run = !h.repeat;
+
 		// execute routine
 		try{
 			h.r->ri_run(*this);
@@ -961,6 +1002,22 @@ dvl::parser::run()
 			continue;
 		}
 
+		// insert result-value into stack-frame after first run
+		if(first_run)
+		{
+			// insert result-values into stack-frame
+			if(h.result == nullptr)
+			{
+				h.result = h.r->get_result();
+				h.insert_next = h.result;
+			}
+			else
+			{
+				h.insert_next->get_next() = h.r->get_result();
+				h.insert_next = h.insert_next->get_next();
+			}
+		}
+
 		// update stack according to new configuration
 		if(next_child != nullptr)
 		{	// execute routine placed for child-execution  next
@@ -978,18 +1035,6 @@ dvl::parser::run()
 		}
 		else if(h.next != nullptr)
 		{	// run the routine following the current routine
-			// insert result-values into stack-frame
-			if(h.result == nullptr)
-			{
-				h.result = h.r->get_result();
-				h.insert_next = h.result;
-			}
-			else
-			{
-				h.insert_next->get_next() = h.r->get_result();
-				h.insert_next = h.insert_next->get_next();
-			}
-
 			// update execution-info of stackframe
 			delete h.r;
 			h.r = h.next;

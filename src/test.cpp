@@ -811,8 +811,13 @@ public:
 		assert_no_throw([this](){ plr->ri_run(ri); }, "struct routine should allow single run");
 		assert_equal(ri.get_next(), er, "Invalid next routine");
 		assert_equal(ri.get_child(), er, "Invalid child routine");
+		assert_equal(ri.get_repeat_count(), 0, "Invalid repeat count");
 	}
 };
+
+///////////////////////////////////////////////////////////////////////////////////
+// parser matcher routine
+//
 
 ///////////////////////////////////////////////////////////////////////////////////
 // test-driver
