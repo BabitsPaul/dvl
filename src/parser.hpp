@@ -1705,28 +1705,30 @@ namespace dvl
 	// pop_callback
 	//
 
-	/**
-	 * Mediator that is used to keep stacks of single modules of the parser in sync.
-	 * In order to keep the stack-frames in the parser in sync it is necessary to
-	 * make sure any modifications to the stack like pushing a new frame,popping one
-	 * moving on to the next routine in the same frame, or even unwinding the frame
-	 * will be done via this interface
-	 *
-	 * @see routine_manager
-	 * @see output_manager
-	 * @see parser
-	 */
-	class stack_callback;	// call for managing callbacks for poping
+	class stack_callback;	// message-pipe for keeping stack of single modules in sync
+							// see below for full documentation
 
 	class stack_callback_interface
 	{
 	protected:
 		typedef parser_routine_factory::parser_routine proutine;
 	public:
-		void pop() = 0;
-		void pop(const parser_exception &e) = 0;
-		void push(proutine *p) = 0;
-		void next_routine(proutine *p) = 0;
+		virtual ~stack_callback_interface(){}
+
+		virtual void pop() = 0;
+		virtual void pop(const parser_exception &e) = 0;
+		virtual void push(proutine *p) = 0;
+		virtual void next_routine(proutine *p) = 0;
+		virtual void repeat() = 0;
+
+		/**
+		 * Called to flush any state-changes to the stack-user. This implies that
+		 * that module must keep it's state and unflushed state-changes separate from each other.
+		 *
+		 * Note that no changes to the externally visible state of the modules are allowed as long
+		 * as step wasn't called.
+		 */
+		virtual void step() = 0;
 	};
 
 	//////////////////////////////////////////////////////////////////////////////////
@@ -1736,15 +1738,12 @@ namespace dvl
 	class routine_manager : public stack_callback_interface
 	{
 	private:
-		typedef parser_routine_factory::parser_routine proutine;
-
 		struct stack_frame
 		{
 		public:
 			stack_frame(){}
 
 			proutine *current = nullptr;
-			proutine *next = nullptr;
 			bool repeat = false;
 		};
 
@@ -1759,15 +1758,16 @@ namespace dvl
 	public:
 		routine_manager(parser_context &context, stack_callback &callback);
 
-		void run_as_child(routine *r);
+		proutine *next();
 
-		void run_as_next(routine *r);
-
-		routine *next();
+		// stack-callback-interface
 
 		void pop();
 		void pop(const parser_exception &e);
-		// TODO callback-function for poping
+		void push(proutine *p);
+		void next_routine(proutine *p);
+		void repeat();
+		void step();
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////
@@ -1779,7 +1779,7 @@ namespace dvl
 	public:
 		output_manager(stack_callback &callback);
 
-		void place()
+		void place();
 	};
 
 	//////////////////////////////////////////////////////////////////////////////////
@@ -1795,6 +1795,23 @@ namespace dvl
 	// pop_callback
 	//
 
+	/**
+	 * Mediator that is used to keep stacks of single modules of the parser in sync.
+	 * In order to keep the stack-frames in the parser in sync it is necessary to
+	 * make sure any modifications to the stack like pushing a new frame,popping one
+	 * moving on to the next routine in the same frame, or even unwinding the frame
+	 * will be done via this interface.
+	 *
+	 * This call is solely used as a synchronous messaging-pipe. Note that each call
+	 * to a method of this class will alter the state of objects that hooked up on the
+	 * pipe and thus it is important to keep in mind that all data will loose validity
+	 * upon calling a method from this interface.
+	 *
+	 * @see routine_manager
+	 * @see output_manager
+	 * @see parser
+	 * @see stack_callback_interface
+	 */
 	class stack_callback
 	{
 		//TODO
@@ -1803,6 +1820,10 @@ namespace dvl
 
 		void pop(){}
 		void pop(const parser_exception &e){}
+		void push(parser_routine_factory::parser_routine *p){}
+		void next(parser_routine_factory::parser_routine *p){}
+		void repeat();
+		void step();
 
 		void register_parser(parser &p){}
 		void register_routine_manager(routine_manager &r){}

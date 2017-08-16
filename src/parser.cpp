@@ -779,6 +779,49 @@ dvl::routine_manager::routine_manager(parser_context &context, stack_callback &c
 	stack_frame f;
 	f.current = factory.build_routine(r);
 	stack.push_front(f);
+}
 
-	iter = stack.begin();
+dvl::routine_manager::proutine*
+dvl::routine_manager::next()
+{
+	if(stack.empty())
+		return nullptr;
+	else
+		return stack[0].current;
+}
+
+void
+dvl::routine_manager::pop()
+{
+
+}
+
+void
+dvl::routine_manager::pop(const parser_exception &e)
+{
+
+}
+
+void
+dvl::routine_manager::push(proutine *p)
+{
+
+}
+
+void
+dvl::routine_manager::next_routine(proutine *p)
+{
+
+}
+
+void
+dvl::routine_manager::repeat()
+{
+
+}
+
+void
+dvl::routine_manager::step()
+{
+
 }

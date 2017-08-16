@@ -25,6 +25,7 @@ int main(int argc, char *argv[])
 	// parser-error???
 	// output corrupted???
 
+	/*
 	try{
 		routine *c = new echo_routine(L"Child"),
 				*n = new echo_routine(L"Next");
@@ -45,6 +46,7 @@ int main(int argc, char *argv[])
 	{
 		std::cout << "Error: " << e.what() << std::endl;
 	}
+	*/
 
 	// test_all();
 
