@@ -763,3 +763,13 @@ dvl::parser_routine_factory::register_transformation(uint8_t type, transform t)
 	transformations[type] = t;
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////
+// stack_callback
+//
+
+void
+dvl::stack_callback::register_callback_interface(stack_callback_interface *callback)
+{
+	interfaces.emplace_back(callback);
+}
+

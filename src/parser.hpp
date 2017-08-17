@@ -1794,6 +1794,11 @@ namespace dvl
 			 * @param callback the stack_callback_interface on which the action will be performed
 			 */
 			virtual void run(stack_callback_interface *callback) = 0;
+
+			/**
+			 * Identifier for the type of the action
+			 */
+			virtual int get_type() const = 0;
 		};
 
 		/**
@@ -1805,11 +1810,26 @@ namespace dvl
 		{
 		public:
 			/**
+			 * The ID associated with pop-actions
+			 *
+			 * @see get_type
+			 */
+			static const int POP_ACTION = 0;
+
+			/**
 			 * Pops a single frame of the stack of the routine specified by the callback.
 			 *
 			 * @param callback the callback_interface from which the frame will be popped
 			 */
 			void run(stack_callback_interface *callback){ callback->pop(); }
+
+			/**
+			 * Getter for the identifier of a pop_action
+			 *
+			 * @return POP_ACTION
+			 * @see POP_ACTION
+			 */
+			int get_type() const{ return POP_ACTION; }
 		};
 
 		/**
@@ -1826,6 +1846,13 @@ namespace dvl
 			const parser_exception &e;
 		public:
 			/**
+			 * THe ID associated with pop_ex_actions
+			 *
+			 * @see get_type
+			 */
+			static const int POP_EX_ACTION = 1;
+
+			/**
 			 * Builds a new action based on the exception that was caught
 			 *
 			 * @param e the exception that needs to be handled
@@ -1839,6 +1866,14 @@ namespace dvl
 			 * @param callback the interface to pop a frame off
 			 */
 			void run(stack_callback_interface *callback){ callback->pop(e); }
+
+			/**
+			 * Getter for the ID of a pop_ex_action
+			 *
+			 * @return POP_EX_ACTION
+			 * @see POP_EX_ACTION
+			 */
+			int get_type() const{ return POP_EX_ACTION; }
 		};
 
 		/**
@@ -1855,6 +1890,13 @@ namespace dvl
 			proutine *const p;
 		public:
 			/**
+			 * The ID associated with push_actions
+			 *
+			 * @see get_type
+			 */
+			static const int PUSH_ACTION = 2;
+
+			/**
 			 * Builds a new push-action that will push the specified routine onto the stack
 			 *
 			 * @param p the routine to push
@@ -1867,22 +1909,88 @@ namespace dvl
 			 * @param callback the stack_callback_interface to push the frame onto
 			 */
 			void run(stack_callback_interface *callback){ callback->push(p); }
+
+			/**
+			 * Getter for the ID of a push_action
+			 *
+			 * @return PUSH_ACTION
+			 * @see PUSH_ACTION
+			 */
+			int get_type() const{ return PUSH_ACTION; }
 		};
 
+		/**
+		 * Action associated with adding a routine that should run as next to
+		 * the currently active frame
+		 *
+		 * @see stack_routine_interface::next_routine(proutine*)
+		 */
 		class next_action : public callback_action
 		{
 		private:
+			/**
+			 * The routine that should run as next in the current stack-frame
+			 */
 			proutine *const p;
 		public:
+			/**
+			 * The ID associated with next_actions
+			 *
+			 * @see get_type
+			 */
+			static const int NEXT_ACTION = 3;
+
+			/**
+			 * Constructs a new action to emplace the routine in the stack
+			 */
 			next_action(proutine *const p): p(p){}
 
+			/**
+			 * Places the routine in the stack of the specified interface
+			 *
+			 * @param callback the stack_callback_interface to place the routine on
+			 */
 			void run(stack_callback_interface *callback){ callback->next_routine(p); }
+
+			/**
+			 * Getter for the ID of a next_action
+			 *
+			 * @return NEXT_ACTION
+			 * @see NEXT_ACTION
+			 */
+			int get_type() const{ return NEXT_ACTION; }
 		};
 
+		/**
+		 * Action associated with repeating the routine in the currently active stack
+		 *
+		 * @see stack_routine_interface::repeat()
+		 */
 		class repeat_action : public callback_action
 		{
 		public:
+			/**
+			 * The ID associated with repeat_actions
+			 *
+			 * @see get_type
+			 */
+			static const int REPEAT_ACTION = 4;
+
+			/**
+			 * Marks the currently active frame for repetition in the specified
+			 * stack_callback_interface
+			 *
+			 * @param callback the stack_callback_interface on which the frame will be marked for repetition
+			 */
 			void run(stack_callback_interface *callback){ callback->repeat(); }
+
+			/**
+			 * Getter for the ID of a repeat_action
+			 *
+			 * @return REPEAT_ACTION
+			 * @see REPEAT_ACTION
+			 */
+			int get_type() const{ return REPEAT_ACTION; }
 		};
 	};
 
@@ -1910,7 +2018,8 @@ namespace dvl
 	 * events with higher priority get scheduled. E.g. popping a frame exception-driven will always
 	 * override repetitions or pushing new frames.
 	 *
-	 * TODO ordering of events according to represented action
+	 * TODO determine which class needs to be notified about which event
+	 * no stable pattern available in case multiple classes perform actions without flushing
 	 *
 	 * @see routine_manager
 	 * @see output_manager
@@ -1923,8 +2032,6 @@ namespace dvl
 		std::vector<stack_callback_interface*> interfaces;
 	public:
 		void register_callback_interface(stack_callback_interface *callback);
-
-		bool is_initialized(){ return false; }
 
 		void pop(const stack_callback_interface *callback);
 		void pop(const stack_callback_interface *callback, const parser_exception &e);
