@@ -21,10 +21,6 @@ int main(int argc, char *argv[])
 	pid root(5, 5, TYPE_STRUCT),
 			loop(5, 6, TYPE_LOOP);
 
-	// loop-routine receives nullpointer as child!!!
-	// parser-error???
-	// output corrupted???
-
 	/*
 	try{
 		routine *c = new echo_routine(L"Child"),

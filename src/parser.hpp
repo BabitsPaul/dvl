@@ -14,6 +14,7 @@
 #include <functional>
 #include <map>
 #include <stack>
+#include <queue>
 
 namespace dvl
 {
@@ -722,10 +723,6 @@ namespace dvl
 		 */
 		std::wstring structure(pid_table &pt, std::wstring indent=L"") const
 		{
-			// TODO purpose???
-			// if(this == nullptr)
-			//	return L"Error - Nullptr as this\n";
-
 			std::wstring result = L"";
 			result.append(indent);
 			result.append(pt.to_string(id, true));
@@ -1665,6 +1662,12 @@ namespace dvl
 	};
 
 	//////////////////////////////////////////////////////////////////////////////////
+	// proutine typedef
+	//
+
+	typedef parser_routine_factory::parser_routine proutine;
+
+	//////////////////////////////////////////////////////////////////////////////////
 	// parser context
 	//
 
@@ -1702,97 +1705,189 @@ namespace dvl
 	};
 
 	//////////////////////////////////////////////////////////////////////////////////
-	// pop_callback
+	// stack_callback_interface
 	//
 
-	class stack_callback;	// message-pipe for keeping stack of single modules in sync
-							// see below for full documentation
-
+	/**
+	 * Interface that is used to keep the stack of a module of the parser in sync with
+	 * all other modules. There is no need to separate state and future state-transitions
+	 * caused by this interface, as callbacks will be managed by the stack_callback and
+	 * handled in apropriate order. This interface is used by @link callback_action in
+	 * order to perform operations related to a specific action.
+	 *
+	 * The basic order of action should be to work off a run of a single routine and
+	 * work off all required actions batchwise as specified for @link stack_callback.
+	 *
+	 * @see stack_callback
+	 * @see callback_actions
+	 */
 	class stack_callback_interface
 	{
-	protected:
-		typedef parser_routine_factory::parser_routine proutine;
 	public:
 		virtual ~stack_callback_interface(){}
 
+		/**
+		 * Pop one frame of the stack of this interface. Calling this
+		 * method multiple times within a single batch should pop
+		 * an according number of frames.
+		 */
 		virtual void pop() = 0;
-		virtual void pop(const parser_exception &e) = 0;
-		virtual void push(proutine *p) = 0;
-		virtual void next_routine(proutine *p) = 0;
-		virtual void repeat() = 0;
 
 		/**
-		 * Called to flush any state-changes to the stack-user. This implies that
-		 * that module must keep it's state and unflushed state-changes separate from each other.
+		 * Pop a stack from this frame exception-driven. Calling this
+		 * method multiple times within a single batch should pop
+		 * an according number of frames.
 		 *
-		 * Note that no changes to the externally visible state of the modules are allowed as long
-		 * as step wasn't called.
+		 * @param e the exception causing the stack-unwinding
 		 */
-		virtual void step() = 0;
+		virtual void pop(const parser_exception &e) = 0;
+
+		/**
+		 * Push a new frame onto the stack that will run the specified routine.
+		 * Calling the method multiple times within a single batch should push
+		 * all frames onto the stack.
+		 *
+		 * @param p the routine to run
+		 */
+		virtual void push(proutine *p) = 0;
+
+		/**
+		 * Emplace a new routine to run next after the one in the current frame.
+		 * Note that if this function is called multiple times while handling a single batch,
+		 * all calls affect the same frame and the corresponding state-changes will be
+		 * implementation-specific. It is recommended to only let the last call take effect.
+		 *
+		 * @param p the routine to run next
+		 */
+		virtual void next_routine(proutine *p) = 0;
+
+		/**
+		 * Marks the routine in the current frame for repetition.
+		 */
+		virtual void repeat() = 0;
 	};
 
-	//////////////////////////////////////////////////////////////////////////////////
-	// routine-manager
+	/////////////////////////////////////////////////////////////////////////////////////
+	// callback_actions
 	//
 
-	class routine_manager : public stack_callback_interface
+	/**
+	 * Provides a collection of actions that perform operations on
+	 * stack_callback_interfaces based on their type.
+	 *
+	 * @see stack_callback_interface
+	 */
+	struct callback_actions
 	{
-	private:
-		struct stack_frame
+	public:
+		/**
+		 * Provides the basic interface for any action
+		 */
+		class callback_action
 		{
 		public:
-			stack_frame(){}
+			virtual ~callback_action(){}
 
-			proutine *current = nullptr;
-			bool repeat = false;
+			/**
+			 * Will be called in order to perform a specific action on a callback_interface
+			 *
+			 * @param callback the stack_callback_interface on which the action will be performed
+			 */
+			virtual void run(stack_callback_interface *callback) = 0;
 		};
 
-		std::deque<stack_frame> stack;
-		std::deque<stack_frame>::iterator iter;
+		/**
+		 * Action related to popping a frame off the stack
+		 *
+		 * @see stack_routine_interface::pop()
+		 */
+		class pop_action : public callback_action
+		{
+		public:
+			/**
+			 * Pops a single frame of the stack of the routine specified by the callback.
+			 *
+			 * @param callback the callback_interface from which the frame will be popped
+			 */
+			void run(stack_callback_interface *callback){ callback->pop(); }
+		};
 
-		parser_context &context;
+		/**
+		 * Action related to popping a frame off the stack exception-driven
+		 *
+		 * @see stack_routine_interface::pop(const parser_exception&)
+		 */
+		class pop_ex_action : public callback_action
+		{
+		private:
+			/**
+			 * Reference to the exception that was caught.
+			 */
+			const parser_exception &e;
+		public:
+			/**
+			 * Builds a new action based on the exception that was caught
+			 *
+			 * @param e the exception that needs to be handled
+			 * @see e
+			 */
+			pop_ex_action(const parser_exception &e): e(e){}
 
-		stack_callback const &callback;
+			/**
+			 * Pops a single frame off the stack of the routine specifiied by callback
+			 *
+			 * @param callback the interface to pop a frame off
+			 */
+			void run(stack_callback_interface *callback){ callback->pop(e); }
+		};
 
-		parser_routine_factory factory;
-	public:
-		routine_manager(parser_context &context, stack_callback &callback);
+		/**
+		 * Action associated with pushing a single frame onto the stack
+		 *
+		 * @see stack_routine_interface::push(proutine*)
+		 */
+		class push_action : public callback_action
+		{
+		private:
+			/**
+			 * The routine that will run on the new frame
+			 */
+			proutine *const p;
+		public:
+			/**
+			 * Builds a new push-action that will push the specified routine onto the stack
+			 *
+			 * @param p the routine to push
+			 */
+			push_action(proutine *const p): p(p){}
 
-		proutine *next();
+			/**
+			 * Pushes a new frame on the stack of the specified interface
+			 *
+			 * @param callback the stack_callback_interface to push the frame onto
+			 */
+			void run(stack_callback_interface *callback){ callback->push(p); }
+		};
 
-		// stack-callback-interface
+		class next_action : public callback_action
+		{
+		private:
+			proutine *const p;
+		public:
+			next_action(proutine *const p): p(p){}
 
-		void pop();
-		void pop(const parser_exception &e);
-		void push(proutine *p);
-		void next_routine(proutine *p);
-		void repeat();
-		void step();
-	};
+			void run(stack_callback_interface *callback){ callback->next_routine(p); }
+		};
 
-	///////////////////////////////////////////////////////////////////////////////////
-	// output-manager
-	//
-
-	class output_manager : public stack_callback_interface
-	{
-	public:
-		output_manager(stack_callback &callback);
-
-		void place();
+		class repeat_action : public callback_action
+		{
+		public:
+			void run(stack_callback_interface *callback){ callback->repeat(); }
+		};
 	};
 
 	//////////////////////////////////////////////////////////////////////////////////
-	// parser
-	//
-
-	class parser : public routine_interface, public stack_callback_interface
-	{
-
-	};
-
-	//////////////////////////////////////////////////////////////////////////////////
-	// pop_callback
+	// stack callback
 	//
 
 	/**
@@ -1802,10 +1897,20 @@ namespace dvl
 	 * moving on to the next routine in the same frame, or even unwinding the frame
 	 * will be done via this interface.
 	 *
-	 * This call is solely used as a synchronous messaging-pipe. Note that each call
-	 * to a method of this class will alter the state of objects that hooked up on the
-	 * pipe and thus it is important to keep in mind that all data will loose validity
-	 * upon calling a method from this interface.
+	 * This call is solely used as a synchronous messaging-pipe. Note that by contract
+	 * none of the actions issued via this callback will affect the externally visible
+	 * state of the interfaces associated with it.
+	 *
+	 * Note that the callback is non-reflexive. This means the calling object (specified as
+	 * parameter in the methods) will not receive a callback, but is responsible on it's own
+	 * for handling further actions.
+	 *
+	 * Note that action wont take place in the order in which they were specified, but by
+	 * modifying the current frame before pushing a new one, or dropping actions if conflicting
+	 * events with higher priority get scheduled. E.g. popping a frame exception-driven will always
+	 * override repetitions or pushing new frames.
+	 *
+	 * TODO ordering of events according to represented action
 	 *
 	 * @see routine_manager
 	 * @see output_manager
@@ -1814,20 +1919,19 @@ namespace dvl
 	 */
 	class stack_callback
 	{
-		//TODO
+	private:
+		std::vector<stack_callback_interface*> interfaces;
 	public:
+		void register_callback_interface(stack_callback_interface *callback);
+
 		bool is_initialized(){ return false; }
 
-		void pop(){}
-		void pop(const parser_exception &e){}
-		void push(parser_routine_factory::parser_routine *p){}
-		void next(parser_routine_factory::parser_routine *p){}
-		void repeat();
-		void step();
-
-		void register_parser(parser &p){}
-		void register_routine_manager(routine_manager &r){}
-		void register_output_manager(output_manager &m){}
+		void pop(const stack_callback_interface *callback);
+		void pop(const stack_callback_interface *callback, const parser_exception &e);
+		void push(const stack_callback_interface *callback, proutine *p);
+		void next(const stack_callback_interface *callback, proutine *p);
+		void repeat(const stack_callback_interface *callback);
+		void step(const stack_callback_interface *callback);
 	};
 }
 

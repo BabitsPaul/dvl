@@ -747,7 +747,7 @@ dvl::parser_routine_factory::parser_routine_factory()
 	});
 }
 
-dvl::parser_routine_factory::parser_routine*
+dvl::proutine*
 dvl::parser_routine_factory::build_routine(routine* r)
 	throw(parser_exception)
 {
@@ -763,65 +763,3 @@ dvl::parser_routine_factory::register_transformation(uint8_t type, transform t)
 	transformations[type] = t;
 }
 
-/////////////////////////////////////////////////////////////////////////////
-// routine_manager
-//
-
-dvl::routine_manager::routine_manager(parser_context &context, stack_callback &callback):
-	context(context),
-	callback(callback)
-{
-	routine *r = context.builder.get();
-
-	if(r == nullptr)
-		throw parser_exception(PARSER, parser_exception::nullptr_error("routine manager - root invalid"));
-
-	stack_frame f;
-	f.current = factory.build_routine(r);
-	stack.push_front(f);
-}
-
-dvl::routine_manager::proutine*
-dvl::routine_manager::next()
-{
-	if(stack.empty())
-		return nullptr;
-	else
-		return stack[0].current;
-}
-
-void
-dvl::routine_manager::pop()
-{
-
-}
-
-void
-dvl::routine_manager::pop(const parser_exception &e)
-{
-
-}
-
-void
-dvl::routine_manager::push(proutine *p)
-{
-
-}
-
-void
-dvl::routine_manager::next_routine(proutine *p)
-{
-
-}
-
-void
-dvl::routine_manager::repeat()
-{
-
-}
-
-void
-dvl::routine_manager::step()
-{
-
-}
