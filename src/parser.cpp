@@ -768,8 +768,90 @@ dvl::parser_routine_factory::register_transformation(uint8_t type, transform t)
 //
 
 void
-dvl::stack_callback::register_callback_interface(stack_callback_interface *callback)
+dvl::stack_callback::update_actions(const stci* callback, action* a)
+{
+	if(actions.find(callback) == actions.end())
+		actions[callback] = std::vector<action*>();
+
+	std::vector<action*> act = actions[callback];
+
+	switch(a->get_type())
+	{
+	case callback_actions::pop_action::POP_ACTION:
+		// reset all action-queues, except for callback itself
+		std::for_each(actions.begin(), actions.end(), [this, &callback](const auto& v){
+			if(v.first == callback)
+			{
+				// check for higher priority
+				if(v.second.end() != std::find_if(v.second.begin(), v.second.end(), [](action *a){
+					return a->get_type() == callback_actions::pop_ex_action::POP_EX_ACTION;
+				}))
+				{
+					// higher prioritized action in queue => prohibited
+					return;
+				}
+
+				// check for lower priority events
+				if(v.second.end() != std::find_if(v.second.begin(), v.second.end(), [](action *a){
+					return a->get_type() != callback_actions::pop_action::POP_ACTION;
+				}))
+				{
+					v.second.clear();
+				}
+			}
+		});
+		break;
+	case callback_actions::pop_ex_action::POP_EX_ACTION:
+		break;
+	case callback_actions::next_action::NEXT_ACTION:
+		break;
+	case callback_actions::push_action::PUSH_ACTION:
+		break;
+	case callback_actions::repeat_action::REPEAT_ACTION:
+		break;
+	default:
+		throw parser_exception(PARSER, "Unsupported action-type");
+	}
+}
+
+void
+dvl::stack_callback::register_callback_interface(stci *callback)
 {
 	interfaces.emplace_back(callback);
 }
 
+void
+dvl::stack_callback::pop(const stci *callback)
+{
+
+}
+
+void
+dvl::stack_callback::pop(const stci *callback, const parser_exception &e)
+{
+
+}
+
+void
+dvl::stack_callback::push(const stci *callback, proutine *p)
+{
+
+}
+
+void
+dvl::stack_callback::next(const stci *callback, proutine *p)
+{
+
+}
+
+void
+dvl::stack_callback::repeat(const stci *callback)
+{
+
+}
+
+void
+dvl::stack_callback::step(const stci *callback)
+{
+
+}

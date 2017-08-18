@@ -2016,10 +2016,16 @@ namespace dvl
 	 * Note that action wont take place in the order in which they were specified, but by
 	 * modifying the current frame before pushing a new one, or dropping actions if conflicting
 	 * events with higher priority get scheduled. E.g. popping a frame exception-driven will always
-	 * override repetitions or pushing new frames.
+	 * override repetitions or pushing new frames. The strict bidirectional order of
+	 * reordering/overriding is the following:
+	 * pop_ex_actions will override any actions of different kind. pop_actions will override any
+	 * actions of lower type. next_actions and repeat_actions will always take place before any
+	 * push_action. Note that in reverse the presence of an overriding action prohibits placement
+	 * of an action of lower priority.
 	 *
-	 * TODO determine which class needs to be notified about which event
-	 * no stable pattern available in case multiple classes perform actions without flushing
+	 * TODO handling interference of multiple modules???
+	 * enforce clearing other queues on pop-actions, but keep for other events
+	 * handle actions by ordering according to step-calls
 	 *
 	 * @see routine_manager
 	 * @see output_manager
@@ -2029,16 +2035,24 @@ namespace dvl
 	class stack_callback
 	{
 	private:
-		std::vector<stack_callback_interface*> interfaces;
+		typedef stack_callback_interface stci;
+		typedef callback_actions::callback_action action;
+
+		std::vector<stci*> interfaces;
+
+		std::vector<action*> actions;
+		stci *active_module = nullptr;
+
+		void update_actions(const stci* callback, action* a);
 	public:
 		void register_callback_interface(stack_callback_interface *callback);
 
-		void pop(const stack_callback_interface *callback);
-		void pop(const stack_callback_interface *callback, const parser_exception &e);
-		void push(const stack_callback_interface *callback, proutine *p);
-		void next(const stack_callback_interface *callback, proutine *p);
-		void repeat(const stack_callback_interface *callback);
-		void step(const stack_callback_interface *callback);
+		void pop(const stci *callback);
+		void pop(const stci *callback, const parser_exception &e);
+		void push(const stci *callback, proutine *p);
+		void next(const stci *callback, proutine *p);
+		void repeat(const stci *callback);
+		void step(const stci *callback);
 	};
 }
 
