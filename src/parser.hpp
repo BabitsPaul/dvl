@@ -1680,8 +1680,9 @@ namespace dvl
 	struct parser_context
 	{
 	public:
-		parser_context(std::wistream &str, routine_tree_builder &builder, pid_table &pt):
-			str(str), builder(builder), pt(pt)
+		parser_context(std::wistream &str, routine_tree_builder &builder, pid_table &pt,
+						parser_routine_factory &factory):
+			str(str), builder(builder), pt(pt), factory(factory)
 		{}
 
 		/**
@@ -1702,6 +1703,14 @@ namespace dvl
 		 * @see pid_table
 		 */
 		pid_table &pt;
+
+		/**
+		 * Routine factory to which any custom routines will be registered
+		 *
+		 * @see parser_routine_factory
+		 */
+
+		parser_routine_factory &factory;
 	};
 
 	//////////////////////////////////////////////////////////////////////////////////
@@ -1709,34 +1718,109 @@ namespace dvl
 	//
 
 	/**
-	 * Owns any proutine it generates. Will transform present routines into proutines
-	 * for use by other managers
+	 * This class manages the routine-stack for a parser. It will merely administer
+	 * this stack, but isn't on it's own sufficient to alter the stack in any non-explicit
+	 * way.
+	 *
+	 * It provides methods to analyze the top of the stack in order to determine how to
+	 * proceed from a certain given state. Following constraints are laid on state-updates:
+	 * pushing a routine must always happen after updates to either the repeat- or next-flags,
+	 * as this class doesn't keep any internal state of the current state, but merely the most
+	 * recent state it was set to. During udpates the state of this manager may be inconsistent
+	 * and deviate from the state of other managers. This manager only guarantees to be in the
+	 * correct state if flags are set in accordance with the above constraints in it's initial state
+	 * and after calling either step or a sequence of pop was called.
+	 *
+	 * This class will not take care of the integrity of the stack, but instead solely relies
+	 * on the fact that the using object/clas will call the methods in correct order.
+	 *
+	 * Instances of this class own any instance of a proutine they generate and are solely
+	 * reliable of deallocating them.
+	 *
+	 * @see parser_routine_factory::parser_routine
+	 * @see output_manager
+	 * @see parser
 	 */
 	class routine_manager
 	{
 	private:
+		/**
+		 * Represents a single stack-frame in the internal stack of
+		 * this class.
+		 *
+		 * @see s
+		 */
 		struct stack_frame
 		{
-		public:
-			proutine *current;
-			proutine *next;
+			friend class routine_manager;
 
-			bool repeat;
+			/**
+			 * The currently active routine in this frame
+			 */
+			proutine *current = nullptr;
+
+			/**
+			 * The routine that will be active next in this frame
+			 */
+			proutine *next = nullptr;
+
+			/**
+			 * Set to true, if the current routine should be repeated in the next run
+			 */
+			bool repeat = false;
 		};
+
+		/**
+		 * The internal stack of the output_manager. Keeps track of the current
+		 * state of the parser via stack_frames
+		 *
+		 * @see stack_frame
+		 */
+		std::stack<stack_frame> s;
+
+		/**
+		 * The parser-context associated with the parser this
+		 * manager is owned by. Since the output_manager administers major parts
+		 * of the parser it is required to share it's configuration.
+		 *
+		 * @see parser
+		 * @see parser_context
+		 */
+		parser_context &context;
+
+		/**
+		 * Utility-method. Ensures that the stack is not empty
+		 *
+		 * @throw parser_exception if the stack is empty
+		 */
+		inline void assert_stack_not_empty()
+			throw(parser_exception)
+		{
+			if(s.empty())
+				throw parser_exception(PARSER, "no currently running routine");
+		}
 	public:
-		routine_manager();
-		~routine_manager(){}
+		routine_manager(parser_context &context);
+		~routine_manager();
 
-		void repeat();
-		proutine* next(routine *r);
-		proutine* push(routine *r);
+		// state-update
+		void repeat() throw(parser_exception);
+		proutine* next(routine *r) throw(parser_exception);
+		proutine* push(routine *r) throw(parser_exception);
 
-		int get_pop_count();
-		int get_pop_count(const parser_exception &e);
+		proutine* current() throw(parser_exception);
 
-		void pop(int ct);
+		bool terminated();
+		bool should_pop() throw(parser_exception);
+		bool should_pop(const parser_exception &e) throw(parser_exception);
 
-		void dump_stack(stack_trace_routine &r);
+		/**
+		 * Updates the stack accordingly to it's current state
+		 */
+		void step() throw(parser_exception);
+		void pop() throw(parser_exception);
+
+		void dump_stack(stack_trace_routine &r) const;
 	};
 
 	//////////////////////////////////////////////////////////////////////////////////
@@ -1749,18 +1833,71 @@ namespace dvl
 	 */
 	class output_manager
 	{
+	private:
+		struct stack_frame
+		{
+			friend class output_manager;
+
+			proutine *cur = nullptr;
+			proutine *first = nullptr;
+
+			lnstruct **next_pos = nullptr;
+			bool repeat = false;
+		};
+
+		class output_helper : proutine
+		{
+		private:
+			lnstruct *& ln;
+		public:
+			output_helper(lnstruct *& ln): proutine(dvl::ROOT), ln(ln){}
+			~output_helper(){}
+
+			lnstruct *get_result(){ return ln; }
+
+			void place_child(dvl::lnstruct *l) throw(parser_exception){ ln->get_child() = l; }
+			void run(routine_interface&) throw(parser_exception){
+				throw parser_exception(PARSER, "Internal failure - output-helper shouldn't run");
+			}
+		};
+
+		std::stack<stack_frame> s;
+
+		parser_context &context;
+
+		lnstruct *ln;
+
+		void assert_stack_not_empty()
+			throw(parser_exception)
+		{
+			if(s.size() <= 1)	// stack also holds output_helper which shouldn't be popped
+				throw parser_exception(PARSER, "no currently running routine");
+		}
 	public:
-		output_manager();
+		/**
+		 * Creates a new output_manager for the provided parser_context.
+		 *
+		 * The manager will validate the routine-graph, but will ignore any
+		 * non-initialized or incorrectly built resources in the context
+		 *
+		 * @param context the parser_context on which this manager is based
+		 * @throw parser_exception if the routine_tree is invalid
+		 * @see parser_context
+		 */
+		output_manager(parser_context &context) throw(parser_exception);
 		~output_manager(){}
 
 		// output will be placed if either next or pop is called
 
-		void repeat();
-		void next(proutine *r);
-		void push(proutine *r);
+		// state-update
+		void repeat() throw(parser_exception);
+		void next(proutine *r) throw(parser_exception);
+		void push(proutine *r) throw(parser_exception);
 
+		// stack-update
+		void step() throw(parser_exception);
 		void pop(int ct) throw(parser_exception);
-		void pop(int ct, const parser_exception &e);
+		void pop(int ct, const parser_exception &e) throw(parser_exception);
 
 		lnstruct *get_output();
 	};
@@ -1768,6 +1905,8 @@ namespace dvl
 	/////////////////////////////////////////////////////////////////////////////////////
 	// parser
 	//
+
+	// TODO ensure that routine-tree has at least one sink
 
 	class parser : public routine_interface
 	{

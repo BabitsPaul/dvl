@@ -764,5 +764,159 @@ dvl::parser_routine_factory::register_transformation(uint8_t type, transform t)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
+// routine_manager
+//
+
+dvl::routine_manager::routine_manager(parser_context &context):
+	context(context)
+{
+	// validate routine-graph
+	if(context.builder.get() == nullptr)
+		throw parser_exception(PARSER, parser_exception::nullptr_error(" Valid routine-tree required"));
+
+	// initialize stack
+	stack_frame frame;
+	frame.current = context.factory.build_routine(context.builder.get());
+
+	s.push(frame);
+}
+
+dvl::routine_manager::~routine_manager()
+{
+	// deallocate all remaining routines in the stack
+	// if any remained active
+	while(!s.empty())
+	{
+		stack_frame &f = s.top();
+
+		delete f.current;
+		delete f.next;
+
+		s.pop();
+	}
+}
+
+void
+dvl::routine_manager::repeat()
+	throw(parser_exception)
+{
+	s.top().repeat = true;
+}
+
+dvl::proutine*
+dvl::routine_manager::next(dvl::routine *r)
+	throw(parser_exception)
+{
+	assert_stack_not_empty();
+
+	stack_frame &frame = s.top();
+
+	// clean up old next-routine if present
+	if(frame.next != nullptr)
+		delete frame.next;
+
+	// upate next-routine and return the produced proutine
+	frame.next =  context.factory.build_routine(r);
+	return frame.next;
+}
+
+dvl::proutine*
+dvl::routine_manager::push(routine *r)
+	throw(parser_exception)
+{
+	stack_frame frame;
+	frame.current = context.factory.build_routine(r);
+
+	s.push(frame);
+
+	return frame.current;
+}
+
+dvl::proutine*
+dvl::routine_manager::current()
+	throw(parser_exception)
+{
+	assert_stack_not_empty();
+
+	return s.top().current;
+}
+
+bool
+dvl::routine_manager::terminated()
+{
+	return s.empty();
+}
+
+bool
+dvl::routine_manager::should_pop()
+	throw(parser_exception)
+{
+	assert_stack_not_empty();
+
+	stack_frame &frame = s.top();
+
+	return !frame.repeat && frame.next == nullptr;
+}
+
+bool
+dvl::routine_manager::should_pop(const parser_exception&)
+	throw(parser_exception)
+{
+	assert_stack_not_empty();
+
+	return !s.top().repeat;
+}
+
+void
+dvl::routine_manager::step()
+	throw(parser_exception)
+{
+	assert_stack_not_empty();
+
+	if(s.top().repeat)
+		s.top().repeat = false;
+	else if(s.top().next != nullptr)
+	{
+		stack_frame &f = s.top();
+
+		delete f.current;
+
+		// update stack
+		f.current = f.next;
+		f.next = nullptr;
+		f.repeat = false;
+	}
+	// else
+	// either a child-routine was placed, or the stack will be popped
+	// => either nothing to alter, or update will be driven via different interface
+}
+
+void
+dvl::routine_manager::pop()
+	throw(parser_exception)
+{
+	assert_stack_not_empty();
+
+	s.pop();
+}
+
+void
+dvl::routine_manager::dump_stack(stack_trace_routine &)
+	const
+{
+	// TODO
+	std::cout << "TODO here goes a stack-dump" << std::endl;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
 // output_manager
 //
+
+dvl::output_manager::output_manager(parser_context &context):
+	context(context)
+{
+	ln = new lnstruct(ROOT, context.str.tellg());
+
+	stack_frame f;
+	f.cur = new output_helper(ln);
+}
