@@ -847,24 +847,24 @@ dvl::routine_manager::terminated()
 	return s.empty();
 }
 
+inline
 bool
-dvl::routine_manager::should_pop()
+dvl::routine_manager::stack_top_repeat()
 	throw(parser_exception)
 {
 	assert_stack_not_empty();
 
-	stack_frame &frame = s.top();
-
-	return !frame.repeat && frame.next == nullptr;
+	return s.top().repeat;
 }
 
+inline
 bool
-dvl::routine_manager::should_pop(const parser_exception&)
+dvl::routine_manager::stack_top_next()
 	throw(parser_exception)
 {
 	assert_stack_not_empty();
 
-	return !s.top().repeat;
+	return s.top().next != nullptr;
 }
 
 void
@@ -912,11 +912,111 @@ dvl::routine_manager::dump_stack(stack_trace_routine &)
 // output_manager
 //
 
-dvl::output_manager::output_manager(parser_context &context):
-	context(context)
+// TODO decouple output from routines as soon as possible => no interference by routine_manager
+// memory management => what to do about failed routines???
+
+dvl::output_manager::output_manager(parser_context &context)
+	throw(parser_exception)
+	: context(context)
 {
 	ln = new lnstruct(ROOT, context.str.tellg());
 
 	stack_frame f;
 	f.cur = new output_helper(ln);
+	s.push(f);
+
+	// TODO frame for root of parser
+}
+
+void
+dvl::output_manager::repeat()
+	throw(parser_exception)
+{
+	assert_stack_not_empty();
+
+	s.top().repeat = true;
+}
+
+void
+dvl::output_manager::next(proutine *r)
+	throw(parser_exception)
+{
+	assert_stack_not_empty();
+
+	s.top().next = r;
+}
+
+void
+dvl::output_manager::push(proutine *r)
+	throw(parser_exception)
+{
+	assert_stack_not_empty();
+
+	stack_frame f;
+	f.cur = r;
+	f.first = r;	// TODO drop
+
+	s.push(f);
+}
+
+void
+dvl::output_manager::step()
+	throw(parser_exception)
+{
+	stack_frame &f = s.top();
+
+	// set result if there was no output set for this frame
+	if(f.result == nullptr)
+		f.result = f.cur->get_result();
+
+	if(f.repeat)
+		f.repeat = false;
+	else if(f.next != nullptr)
+	{
+		lnstruct *ln = f.cur->get_result();
+
+		f.cur = f.next;
+
+		if(f.next_pos == nullptr)
+			f.next_pos = &ln->get_next();
+		else
+		{
+			*f.next_pos = ln;
+			f.next_pos = &ln->get_next();
+		}
+	}
+}
+
+void
+dvl::output_manager::pop()
+	throw(parser_exception)
+{
+	assert_stack_not_empty();
+
+	// set result if there was no output set for this frame
+	if(s.top().result == nullptr)
+		s.top().result = s.top().cur->get_result();
+
+	lnstruct *ln = s.top().result;
+	s.pop();
+
+	// place result in parent-frame
+	s.top().cur->ri_place_child(ln);
+}
+
+void
+dvl::output_manager::pop_ex(const parser_exception&)
+	throw(parser_exception)
+{
+	assert_stack_not_empty();
+
+	delete s.top().first->get_result();
+
+	s.pop();
+}
+
+dvl::lnstruct*
+dvl::output_manager::get_output()
+{
+	return ln->get_child();
 }

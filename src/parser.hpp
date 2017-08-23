@@ -1717,6 +1717,9 @@ namespace dvl
 	// routine_manager
 	//
 
+	//TODO dot-diagram of parser-state-transitions
+	//TODO set starting-point for managers via push??
+
 	/**
 	 * This class manages the routine-stack for a parser. It will merely administer
 	 * this stack, but isn't on it's own sufficient to alter the stack in any non-explicit
@@ -1800,19 +1803,98 @@ namespace dvl
 				throw parser_exception(PARSER, "no currently running routine");
 		}
 	public:
+		/**
+		 * Constructs a new routine_manager for the given parser_context and
+		 * initializes the stack with the root of the parser
+		 *
+		 * @param context the parser_context for this manager
+		 */
 		routine_manager(parser_context &context);
 		~routine_manager();
 
 		// state-update
+		/**
+		 * Marks the routine in the active stackframe for repetition
+		 *
+		 * @throw parser_exception if the stack is empty
+		 * @see s
+		 * @see stack_frame
+		 */
 		void repeat() throw(parser_exception);
+
+		/**
+		 * Sets the routine to be executed after the current routine in the active
+		 * frame. Note that this doesn't imply that r will actually be executed next,
+		 * but merely next in the active frame.
+		 *
+		 * @param r the routine to run next
+		 * @return the proutine that results from transforming r
+		 * @throw parser_exception if the stack is empty
+		 *
+		 * @see s
+		 * @see context
+		 * @see parser_routine_factory
+		 */
 		proutine* next(routine *r) throw(parser_exception);
+
+		/**
+		 * Inserts a routine into the stack to run as child of the routine
+		 * in the active frame. Note that multiple calls will result in the
+		 * stack pushing multiple frames!
+		 *
+		 * A routine place via this interface is guaranteed to run next
+		 * after the routine in the current frame, unless the parent-routine
+		 * fails
+		 *
+		 * @param r the routine to push
+		 * @return the routine resulting from the transformation of r
+		 * @throw parser_exception if the stack is empty
+		 *
+		 * @see s
+		 * @see context
+		 * @see parser_routine_factory
+		 */
 		proutine* push(routine *r) throw(parser_exception);
 
+		/**
+		 * Returns the currently active routine, which is the
+		 * current routine of the top-most stack_frame
+		 *
+		 * @return the currently active routine
+		 * @throw parser_exception if the stack is empty
+		 *
+		 * @see s
+		 */
 		proutine* current() throw(parser_exception);
 
+		/**
+		 * Determines whether the parser should terminate.
+		 * The parser is in a terminating state, if all stack_frames were
+		 * popped
+		 *
+		 * @return true if there is not future-state available for this manager
+		 */
 		bool terminated();
-		bool should_pop() throw(parser_exception);
-		bool should_pop(const parser_exception &e) throw(parser_exception);
+
+		/**
+		 * Tests whether the currently running routine has the repeat-flag set
+		 *
+		 * @return true if the current routine has the repeat-flag set
+		 * @throw parser_exception if the stack is empty
+		 * @see s
+		 * @see stack_frame::repeat
+		 */
+		inline bool stack_top_repeat() throw(parser_exception);
+
+		/**
+		 * Tests if the currently running routine has a next routine set
+		 *
+		 * @return true if a next routine is set in the current frame
+		 * @throw parser_exception if the stack is empty
+		 * @see s
+		 * @see stack_frame::next
+		 */
+		inline bool stack_top_next() throw(parser_exception);
 
 		/**
 		 * Updates the stack accordingly to it's current state
@@ -1839,13 +1921,17 @@ namespace dvl
 			friend class output_manager;
 
 			proutine *cur = nullptr;
+			proutine *next = nullptr;
+
 			proutine *first = nullptr;
+
+			lnstruct *result = nullptr;
 
 			lnstruct **next_pos = nullptr;
 			bool repeat = false;
 		};
 
-		class output_helper : proutine
+		class output_helper : public proutine
 		{
 		private:
 			lnstruct *& ln;
@@ -1896,8 +1982,8 @@ namespace dvl
 
 		// stack-update
 		void step() throw(parser_exception);
-		void pop(int ct) throw(parser_exception);
-		void pop(int ct, const parser_exception &e) throw(parser_exception);
+		void pop() throw(parser_exception);
+		void pop_ex(const parser_exception &e) throw(parser_exception);
 
 		lnstruct *get_output();
 	};
