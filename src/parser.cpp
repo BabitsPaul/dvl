@@ -751,7 +751,7 @@ dvl::proutine*
 dvl::parser_routine_factory::build_routine(routine* r)
 	throw(parser_exception)
 {
-	if(transformations.count(r->get_pid().get_type()))
+	if(transformations.find(r->get_pid().get_type()) != transformations.end())
 		return transformations[r->get_pid().get_type()](r);
 	else
 		throw parser_exception(PARSER, "No generator for routine of specified type found");
@@ -773,12 +773,6 @@ dvl::routine_manager::routine_manager(parser_context &context):
 	// validate routine-graph
 	if(context.builder.get() == nullptr)
 		throw parser_exception(PARSER, parser_exception::nullptr_error(" Valid routine-tree required"));
-
-	// initialize stack
-	stack_frame frame;
-	frame.current = context.factory.build_routine(context.builder.get());
-
-	s.push(frame);
 }
 
 dvl::routine_manager::~routine_manager()
@@ -904,16 +898,13 @@ void
 dvl::routine_manager::dump_stack(stack_trace_routine &)
 	const
 {
-	// TODO
+	// TODO stacktrace
 	std::cout << "TODO here goes a stack-dump" << std::endl;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // output_manager
 //
-
-// TODO decouple output from routines as soon as possible => no interference by routine_manager
-// memory management => what to do about failed routines???
 
 dvl::output_manager::output_manager(parser_context &context)
 	throw(parser_exception)
@@ -924,8 +915,6 @@ dvl::output_manager::output_manager(parser_context &context)
 	stack_frame f;
 	f.cur = new output_helper(ln);
 	s.push(f);
-
-	// TODO frame for root of parser
 }
 
 void
@@ -950,11 +939,8 @@ void
 dvl::output_manager::push(proutine *r)
 	throw(parser_exception)
 {
-	assert_stack_not_empty();
-
 	stack_frame f;
 	f.cur = r;
-	f.first = r;	// TODO drop
 
 	s.push(f);
 }
@@ -1010,7 +996,10 @@ dvl::output_manager::pop_ex(const parser_exception&)
 {
 	assert_stack_not_empty();
 
-	delete s.top().first->get_result();
+	if(s.top().result == nullptr)	// failure during first routine
+		delete s.top().cur->get_result();
+	else
+		delete s.top().result;
 
 	s.pop();
 }
@@ -1019,4 +1008,157 @@ dvl::lnstruct*
 dvl::output_manager::get_output()
 {
 	return ln->get_child();
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+// parser
+//
+
+void
+dvl::parser::pop()
+	throw(parser_exception)
+{
+	o.pop();
+	r.pop();
+
+	try{
+		while(!r.stack_top_next() && !r.stack_top_repeat())
+		{
+			o.pop();
+			r.pop();
+		}
+	}catch(const parser_exception& e)
+	{
+		// deallocate exception, if set (shouldn't be set, this is just
+		// used to avoid memory-leaks)
+		if(this->e != nullptr)
+			delete this->e;
+
+		this->e = e.clone();
+
+		// pop via exception
+		pop_ex();
+	}
+}
+
+void
+dvl::parser::pop_ex()
+	throw(parser_exception)
+{
+	o.pop_ex(*e);
+	r.pop();
+
+	try{
+		while(!r.stack_top_repeat())
+		{
+			o.pop_ex(*e);
+			r.pop();
+		}
+	}catch(const parser_exception &e)
+	{
+		if(this->e != nullptr)
+			delete this->e;
+
+		this->e = e.clone();
+
+		// exception-handling failed => terminate
+		throw;
+	}
+}
+
+dvl::parser::parser(parser_context &c):
+		r(c),
+		o(c),
+		c(c),
+		e(nullptr)
+{}
+
+void
+dvl::parser::run()
+	throw(parser_exception)
+{
+	if(c.builder.get() == nullptr)
+		throw parser_exception(PARSER, parser_exception::nullptr_error("Root of routine-graph must not be null"));
+
+	// initialize
+	update.reset();
+	o.push(r.push(c.builder.get()));
+
+	while(!r.terminated())
+	{
+		// TODO assert tops of stacks match
+
+		try{
+			update.reset();
+
+			r.current()->ri_run(*this);
+
+			// reset exception-flag
+			delete e;
+			e = nullptr;
+		}catch(const parser_exception &e)
+		{
+			this->e = e.clone();
+		}
+
+		// proc
+		if(update.repeat)
+		{
+			o.repeat();
+			r.repeat();
+		}
+
+		if(update.next != nullptr)
+			o.next(r.next(update.next));
+
+		if(update.child != nullptr)
+			o.push(r.push(update.child));
+
+		// cur
+		if(!r.stack_top_repeat() && !r.stack_top_next())
+			pop();
+		else
+		{
+			o.step();
+			r.step();
+		}
+	}
+}
+
+void
+dvl::parser::repeat()
+{
+	update.repeat = true;
+}
+
+void
+dvl::parser::run_as_next(routine *r)
+{
+	update.next = r;
+}
+
+void
+dvl::parser::run_as_child(routine *r)
+{
+	update.child = r;
+}
+
+void
+dvl::parser::check_child_exception()
+	throw(parser_exception)
+{
+	if(e != nullptr)
+		throw *e;
+}
+
+std::wistream&
+dvl::parser::get_istream()
+{
+	return c.str;
+}
+
+void
+dvl::parser::visit(stack_trace_routine &r)
+{
+	this->r.dump_stack(r);
 }

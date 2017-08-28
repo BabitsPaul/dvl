@@ -12,16 +12,15 @@ void setup_params(int, char**)
 
 int main(int argc, char *argv[])
 {
-	setup_params(argc, argv);
-
 	using namespace dvl;
+
+	setup_params(argc, argv);
 
 	init_glob_locale();
 
 	pid root(5, 5, TYPE_STRUCT),
 			loop(5, 6, TYPE_LOOP);
 
-	/*
 	try{
 		routine *c = new echo_routine(L"Child"),
 				*n = new echo_routine(L"Next");
@@ -34,7 +33,8 @@ int main(int argc, char *argv[])
 				loop(loop, 0, 4).by_ptr(n);
 
 		pid_table table;
-		parser_context pc(std::wcin, rb, table);
+		parser_routine_factory f;
+		parser_context pc(std::wcin, rb, table, f);
 
 		parser p(pc);
 		p.run();
@@ -42,7 +42,6 @@ int main(int argc, char *argv[])
 	{
 		std::cout << "Error: " << e.what() << std::endl;
 	}
-	*/
 
 	// test_all();
 

@@ -2,6 +2,7 @@
 #define _PARSER_H_
 
 #include "id.hpp"
+#include "util.hpp"
 
 #include <cstdint>
 #include <exception>
@@ -1718,7 +1719,6 @@ namespace dvl
 	//
 
 	//TODO dot-diagram of parser-state-transitions
-	//TODO set starting-point for managers via push??
 
 	/**
 	 * This class manages the routine-stack for a parser. It will merely administer
@@ -1900,6 +1900,15 @@ namespace dvl
 		 * Updates the stack accordingly to it's current state
 		 */
 		void step() throw(parser_exception);
+
+		/**
+		 * Pops a single frame off the stack. It is guaranteed that no changes will be made to
+		 * the stack if an exception is thrown.
+		 *
+		 * @throw parser_exception if the popping failed
+		 * @see s
+		 * @see push
+		 */
 		void pop() throw(parser_exception);
 
 		void dump_stack(stack_trace_routine &r) const;
@@ -1922,8 +1931,6 @@ namespace dvl
 
 			proutine *cur = nullptr;
 			proutine *next = nullptr;
-
-			proutine *first = nullptr;
 
 			lnstruct *result = nullptr;
 
@@ -1982,6 +1989,13 @@ namespace dvl
 
 		// stack-update
 		void step() throw(parser_exception);
+
+		/**
+		 * TODO
+		 *
+		 * Pops a single frame off the stack. It is guaranteed that the stack won't
+		 * be altered if any exception is thrown.
+		 */
 		void pop() throw(parser_exception);
 		void pop_ex(const parser_exception &e) throw(parser_exception);
 
@@ -1996,7 +2010,52 @@ namespace dvl
 
 	class parser : public routine_interface
 	{
+	private:
+		routine_manager r;
 
+		output_manager o;
+
+		parser_context &c;
+
+		parser_exception *e;
+
+		struct{
+		public:
+			bool repeat;
+
+			routine *next;
+
+			routine *child;
+
+			void reset()
+			{
+				repeat = false;
+				next = nullptr;
+				child = nullptr;
+			}
+		} update;
+
+		void pop() throw(parser_exception);
+
+		void pop_ex() throw(parser_exception);
+	public:
+		parser(parser_context &c);
+		~parser(){}
+
+		void run() throw(parser_exception);
+
+		// routine-interface
+		void repeat();
+
+		void run_as_next(routine *r);
+
+		void run_as_child(routine *r);
+
+		void check_child_exception() throw(parser_exception);
+
+		std::wistream &get_istream();
+
+		void visit(stack_trace_routine &r);
 	};
 
 }
