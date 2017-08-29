@@ -1115,7 +1115,7 @@ dvl::parser::run()
 			o.push(r.push(update.child));
 
 		// cur
-		if(!r.stack_top_repeat() && !r.stack_top_next())
+		if(!r.stack_top_repeat() && !r.stack_top_next() && update.child == nullptr)
 			pop();
 		else
 		{
