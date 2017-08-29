@@ -1677,8 +1677,9 @@ namespace dvl
 	struct parser_context
 	{
 	public:
-		parser_context(std::wistream &str, routine_tree_builder &builder, pid_table &pt):
-			str(str), builder(builder), pt(pt)
+		parser_context(std::wistream &str, routine_tree_builder &builder, pid_table &pt,
+				parser_routine_factory &factory):
+			str(str), builder(builder), pt(pt), factory(factory)
 		{}
 
 		/**
@@ -1699,202 +1700,14 @@ namespace dvl
 		 * @see pid_table
 		 */
 		pid_table &pt;
-	};
-
-	///////////////////////////////////////////////////////////////////////////////////
-	// parser
-	//
-
-	/**
-	 * The parser does not own the output produced. It must be destroyed separately by
-	 * the routine used to process output of this parser.
-	 *
-	 * Note that in case of an abnormal destruction of the parser (didn't terminate properly),
-	 * the above doesn't hold and any output that was generated will be destroyed.
-	 */
-	class parser : public routine_interface
-	{
-	private:
-		typedef parser_routine_factory::parser_routine proutine;
 
 		/**
-		 * Datastructure to hold a stack-element that holds a
-		 * stackframe for a single step in the execution of the
-		 * graph defined by routines.
+		 * Factory for building routines within this context. This can
+		 * be used to introduce new types of routines.
+		 *
+		 * @see parser_routine_factory
 		 */
-		struct stack_helper
-		{
-		public:
-			/**
-			 * Creates a new stack-helper structure. By default any field but the
-			 * proutine running first within the stack-frame represented by the helper
-			 * will be set to a non-value according to its type by default.
-			 *
-			 * The stream_pos may be set or will be set to -1 by default to mark the
-			 * position as invalid.
-			 */
-			stack_helper(proutine *r, long stream_pos = -1l):
-				stream_marker(stream_pos), r(r){}
-
-			/**
-			 * Marker for the position of the input-stream at which
-			 * this stack-frame was entered.
-			 *
-			 * This marker gets set once a new stack-frame is entered and
-			 * won't be altered afterwards. In case of failure driven stack-unwinding
-			 * the input-stream will be reset to the marker of the lowest frame that
-			 * will be popped of the stack.
-			 *
-			 * @see unwind_stack
-			 */
-			long stream_marker;
-
-			/**
-			 * The routine currently active within this stackframe.
-			 */
-			proutine *r;
-
-			/**
-			 * The next routine to run after the currently active routine.
-			 *
-			 * @see r
-			 * @see lnstruct::get_next()
-			 */
-			proutine *next = nullptr;
-
-			/**
-			 * If set to true the currently active routine will be run again once this
-			 * stack-frame will be reached again.
-			 *
-			 * @see r
-			 */
-			bool repeat = false;
-
-			/**
-			 * The output of routines running on this stackframe and potentially
-			 * of routines running on higher stackframes. Once this stackframe completed and gets
-			 * popped the active routine of the next lower stackframe will place this lnstruct
-			 * via place_child.
-			 *
-			 * @see lnstruct
-			 * @see parser_routine_factory::parser_routine::place_child()
-			 */
-			lnstruct *result = nullptr;
-
-			/**
-			 * Insertion-position to which the output of the current routine will be appended
-			 * via @link lnstruct::get_next() if there were already other routines running within
-			 * this stack-frame.
-			 */
-			lnstruct *insert_next = nullptr;
-		};
-
-		/**
-		 * Holds stack-frame as queue of stack-helpers. The top of the stack
-		 * is equivalent to the front of the queue.
-		 */
-		std::deque<stack_helper> exec_stack;
-
-		parser_routine_factory *factory;
-
-		lnstruct *output;
-
-		proutine *next_child;
-
-		// TODO more efficient way of storing and rethrowing exception than keeping permanent in memory
-
-		/**
-		 * Holds a clone of the last thrown routine that will
-		 * be handled by the parent-routine of the current routine.
-		 */
-		parser_exception *e;
-
-		/**
-		 * If this flag is set to true, the currently held exception is valid for the current
-		 * stack-trace and needs to be handled. Will be reset upon checking the exception
-		 *
-		 * @see e
-		 * @see check_child_exception
-		 */
-		bool ex_active;
-
-		parser_context &context;
-
-		// validates the inputstream
-		void validate_istream() throw(parser_exception);
-
-		/**
-		 * Unwinds the exec_stack until the next runnable routine is found. If
-		 * called with exception_unwind = true, the stack will be unwound without
-		 * making any potential results permanent. This should be used if a routine
-		 * fails. Calling with exception_unwind = false will unwind the stack and make
-		 * the output of routines in the stack permanent.
-		 *
-		 * Any resources in the stack will be either deallocated or made permanent (lnstructs).
-		 * Any other resources that enter or leave the stack must be deallocated by other means!!!
-		 *
-		 * If exception_unwind is set to true the top-most frame will be assumed to have caused
-		 * the failure and will be popped irrespective of any flags set in the frame.
-		 *
-		 * Will throw a parser-exception if any violations in the stack-structure are
-		 * encountered.
-		 *
-		 * In failure-driven mode, this method will also reset the input-stream to the
-		 * offset of the highest failed entity/routine in the stack.
-		 *
-		 * If any routine-based failures (e.g. @link parser_routine::place_child) occur,
-		 * the stack will automatically be unwound further failure-driven.
-		 */
-		void unwind_stack(bool exception_unwind = false)
-			throw(parser_exception);
- 	public:
-		parser(parser_context &context);
-		~parser();
-
-		/**
-		 * Runs the parser. Processes the routine-stack and processes
-		 * output of single routines.
-		 *
-		 * TODO use list in docs (<ol>)
-		 * Execution-order of routines in the stack:
-		 * - child-routines
-		 * - routine itself, if repeat-flag is set
-		 * - routine following the active routine
-		 * - routines that are lower in the stack and marked for repetition
-		 * - routines that are lower in the stack and follow routines in the active stacktrace
-		 */
-		void run() throw(parser_exception);
-
-		lnstruct *get_output_root();
-
-		// routine interface
-		void repeat();
-
-		void run_as_next(routine *r);
-
-		void run_as_child(routine *r);
-
-		/**
-		 * Checks if the child-routine threw an exception. This method won't throw if either
-		 * non of the child-routines threw an exception or no child-routines existed. If
-		 * a child threw an exception, this method will rethrow the exception.
-		 *
-		 * If this method throws an exception the output of all child-routines will
-		 * be deallocated and can't be used.
-		 *
-		 * By contract if this method doesn't throw an exception, place_child will be
-		 * called and vice versa.
-		 *
-		 * @throws parser_exception if a child-routine failed.
-		 * @see unwind
-		 * @see parser_exception
-		 * @see parser_routine_factory::parser_routine::place_child
-		 */
-		void check_child_exception() throw(parser_exception);
-
-		std::wistream &get_istream(){ return context.str; }
-
-		void visit(stack_trace_routine &r);
+		parser_routine_factory &factory;
 	};
 }
 
