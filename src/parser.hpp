@@ -1709,6 +1709,125 @@ namespace dvl
 		 */
 		parser_routine_factory &factory;
 	};
+
+	/////////////////////////////////////////////////////////////////////////////////
+	// parser
+	//
+
+	class parser : public routine_interface
+	{
+	private:
+		typedef parser_routine_factory::parser_routine proutine;
+
+		class stack_frame
+		{
+			friend class parser;
+
+			stack_frame(int pos): stream_marker(pos){}
+
+			proutine *cur = nullptr;
+			proutine *next = nullptr;
+
+			bool repeat = false;
+			bool repeated = false;
+
+			lnstruct *result = nullptr;
+			lnstruct **next_insert = &result;	// start insertion at first position (= result of this frame)
+
+			const long stream_marker;
+
+			void switch_to_next_routine()
+			{
+				delete cur;
+				cur = next;
+				next = nullptr;
+				repeat = false;
+				repeated = false;
+			}
+
+			void init_next_insert()
+			{
+				// TODO better alternative to explicit initialization
+				next_insert = &result;
+			}
+		};
+
+		class output_helper : public proutine
+		{
+		private:
+			lnstruct *&ln;
+
+			routine *root;
+		public:
+			output_helper(lnstruct *& ln, routine *root):
+				proutine(ROOT),
+				ln(ln),
+				root(root){}
+
+			lnstruct *get_result(){ return nullptr; }	// shouldn't be called
+
+			void place_child(lnstruct *ln) throw(parser_exception) { this->ln = ln; }
+
+			void run(routine_interface &ri) throw(parser_exception)	{ ri.run_as_child(root); }
+
+		};
+
+		struct
+		{
+			friend class parser;
+
+			routine *next = nullptr;
+			routine *child = nullptr;
+			bool repeat = false;
+
+			void reset()
+			{
+				next = nullptr;
+				child = nullptr;
+				repeat = false;
+			}
+		} update;
+
+		std::stack<stack_frame> s;
+
+		parser_exception *e = nullptr;
+
+		parser_context &context;
+
+		lnstruct *result = nullptr;
+
+		void unwind() throw(parser_exception);
+		void unwind_ex() throw(parser_exception);
+
+		inline void assert_stack_not_empty()
+			throw(parser_exception)
+		{
+			if(s.size() < 2)
+				throw parser_exception(PARSER, "Invalid operation - stack is empty");
+		}
+	public:
+		parser(parser_context &context) throw(parser_exception);
+		~parser();
+
+		void run() throw(parser_exception);
+
+		// routine_interface
+
+		void repeat(){ update.repeat = true; }
+		void run_as_next(routine *r){ update.next = r; }
+		void run_as_child(routine *r){ update.child = r; }
+
+		void check_child_exception()
+			throw(parser_exception)
+		{
+			if(e != nullptr)
+				throw *e;
+		}
+
+		std::wistream& get_istream(){ return context.str; }
+
+		void visit(stack_trace_routine &r);
+	};
 }
 
 #endif

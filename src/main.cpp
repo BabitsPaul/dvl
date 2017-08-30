@@ -21,10 +21,6 @@ int main(int argc, char *argv[])
 	pid root(5, 5, TYPE_STRUCT),
 			loop(5, 6, TYPE_LOOP);
 
-	// loop-routine receives nullpointer as child!!!
-	// parser-error???
-	// output corrupted???
-
 	try{
 		routine *c = new echo_routine(L"Child"),
 				*n = new echo_routine(L"Next");
@@ -37,7 +33,8 @@ int main(int argc, char *argv[])
 				loop(loop, 0, 4).by_ptr(n);
 
 		pid_table table;
-		parser_context pc(std::wcin, rb, table);
+		parser_routine_factory factory;
+		parser_context pc(std::wcin, rb, table, factory);
 
 		parser p(pc);
 		p.run();

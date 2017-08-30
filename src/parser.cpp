@@ -762,3 +762,206 @@ dvl::parser_routine_factory::register_transformation(uint8_t type, transform t)
 {
 	transformations[type] = t;
 }
+
+//////////////////////////////////////////////////////////////////////////////////////
+// parser
+//
+
+void
+dvl::parser::unwind()
+	throw(parser_exception)
+{
+	try{
+		{	// pop first frame irrespective of it's state
+			lnstruct *ln = s.top().result;
+			if(s.top().next != nullptr && s.top().next != s.top().cur)
+				delete s.top().next;
+			delete s.top().cur;
+
+			s.pop();
+
+			s.top().cur->ri_place_child(ln);	// chain output
+		}
+
+		while(!s.empty() && !s.top().repeat && s.top().next == nullptr)
+		{
+			stack_frame &f = s.top();
+			lnstruct *ln = f.result;
+			delete f.cur;
+
+			s.pop();
+
+			if(!s.empty())	// TODO keep helper?
+				s.top().cur->ri_place_child(ln);	// chain output
+		}
+
+		if(!s.empty())
+		{
+			// step
+			if(s.top().repeat)
+				s.top().repeat = false;
+			else
+				s.top().switch_to_next_routine();
+		}
+	}catch(const parser_exception &ex)
+	{
+		std::cout << "exception in unwind: " << ex.what() << std::endl;
+
+		if(e != nullptr)
+			delete e;
+
+		e = ex.clone();
+
+		// ex
+		unwind_ex();
+	}
+}
+
+void
+dvl::parser::unwind_ex()
+	throw(parser_exception)
+{
+	if(s.size() == 0)
+		throw parser_exception(PARSER, "empty stack");
+
+	// pop
+	{
+		delete s.top().result;
+		if(s.top().next != nullptr && s.top().next != s.top().cur)
+			delete s.top().next;
+		delete s.top().cur;
+
+		context.str.seekg(s.top().stream_marker, std::ios::beg);
+
+		s.pop();
+	}
+
+	// pop_ex
+	while(!s.empty() && !s.top().repeat)
+	{
+		// reset stream position
+		context.str.seekg(s.top().stream_marker, std::ios::beg);
+
+		delete s.top().result;
+		if(s.top().next != nullptr && s.top().next != s.top().cur)
+			delete s.top().next;
+		delete s.top().cur;
+
+		s.pop();
+	}
+
+	// step
+	if(!s.empty())
+		s.top().repeat = false;
+}
+
+dvl::parser::parser(parser_context &context)
+	throw(parser_exception)
+	:context(context)
+{
+	if(context.builder.get() == nullptr)
+		throw parser_exception(PARSER, "No definition available");
+
+	if(!context.str)
+		throw parser_exception(PARSER, "Can't read input");
+
+	stack_frame f(context.str.tellg());
+	f.cur = new output_helper(result, context.builder.get());
+	s.push(f);
+	s.top().init_next_insert();
+}
+
+dvl::parser::~parser()
+{
+	while(!s.empty())
+	{
+		stack_frame &f = s.top();
+
+		delete f.cur;
+
+		if(f.next != nullptr)
+			delete f.next;
+
+		// TODO delete output???
+
+		s.pop();
+	}
+}
+
+void
+dvl::parser::run()
+	throw(parser_exception)
+{
+	while(!s.empty())
+	{
+		update.reset();
+
+		std::wcout << L"Running routine :" << context.pt.to_string(s.top().cur->get_pid()) << std::endl;
+
+		try{
+			// run
+			s.top().cur->ri_run(*this);
+
+			// done
+			e = nullptr;	// reset exception-flag
+		}catch(parser_exception &ex)
+		{
+			std::cout << "exception in run: " << ex.what() << std::endl;
+
+			e = ex.clone();
+
+			unwind_ex();
+
+			continue;
+		}
+
+		// proc
+		stack_frame &f = s.top();
+
+		if(!f.repeated)
+		{
+			// place output
+			*f.next_insert = f.cur->get_result();
+			f.next_insert = &(*f.next_insert)->get_next();
+
+			f.repeated = true;
+		}
+
+		f.repeat = update.repeat;
+
+		if(update.next != nullptr)
+		{
+			if(f.next != nullptr)
+				delete f.next;
+
+			f.next = context.factory.build_routine(update.next);
+		}
+
+		if(update.child != nullptr)
+		{
+			stack_frame nf(context.str.tellg());
+			nf.cur = context.factory.build_routine(update.child);
+
+			s.push(nf);
+			s.top().init_next_insert();
+
+			// step
+			continue;
+		}
+
+		// step
+		if(update.repeat)
+			s.top().repeat = false;
+		else if(update.next != nullptr)
+			s.top().switch_to_next_routine();
+		else
+			unwind();
+	}
+}
+
+void
+dvl::parser::visit(stack_trace_routine&)
+{
+	// TODO
+	std::cout << "Here should go a stacktrace" << std::endl;
+}
