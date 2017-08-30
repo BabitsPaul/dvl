@@ -40,10 +40,6 @@ dvl::pid_table::pid_table()
 //non-recursively deletes deeply nested structure of lnstructs
 dvl::lnstruct::~lnstruct()
 {
-	// TODO no repeated deallocations, no deletion of unallocated objects,but SIGSEGV
-	// use separate manager for output with stack as shared instance
-
-	/*
 	//check if free is valid for deallocation of objects
 	std::queue<lnstruct*> q;
 	q.push(next);
@@ -63,16 +59,8 @@ dvl::lnstruct::~lnstruct()
 		ln->next = nullptr;
 		ln->child = nullptr;
 
-		delete ln;	// TODO causes SIGSEGV
+		delete ln;
 	}
-	*/
-
-	// doesn't work either => wrong linkage
-	if(next != nullptr)
-		delete next;
-
-	if(child != nullptr)
-		delete child;
 }
 
 int
@@ -185,6 +173,8 @@ void
 dvl::routine_tree_builder::insert_node(routine *rn)
 	throw(parser_exception)
 {
+	routines.emplace_back(rn);
+
 	try{
 		if(r == nullptr)
 		{
@@ -231,8 +221,6 @@ dvl::routine_tree_builder::insert_node(routine *rn)
 		default:
 			throw parser_exception(PARSER, "Invalid insertion-mode");
 		}
-
-		routines.emplace_back(rn);
 	}catch(const parser_exception &e)
 	{
 		// if insertion fails delete the routine and throw an error
@@ -722,6 +710,10 @@ dvl::parser_routine_factory::parser_routine_factory()
 		return new routine_factory_util::parser_struct_routine((struct_routine*) r);
 	});
 
+	register_transformation(TYPE_STRING_MATCHER, [](routine *r)->routine_factory_util::parser_matcher_routine*{
+		return new routine_factory_util::parser_matcher_routine((string_matcher_routine*) r);
+	});
+
 	register_transformation(TYPE_INTERNAL, [](routine *r)->parser_routine_factory::parser_routine*{
 		switch(r->get_pid().get_group())
 		{
@@ -751,7 +743,7 @@ dvl::parser_routine_factory::parser_routine*
 dvl::parser_routine_factory::build_routine(routine* r)
 	throw(parser_exception)
 {
-	if(transformations.count(r->get_pid().get_type()))
+	if(transformations.find(r->get_pid().get_type()) != transformations.end())
 		return transformations[r->get_pid().get_type()](r);
 	else
 		throw parser_exception(PARSER, "No generator for routine of specified type found");
@@ -766,6 +758,21 @@ dvl::parser_routine_factory::register_transformation(uint8_t type, transform t)
 //////////////////////////////////////////////////////////////////////////////////////
 // parser
 //
+
+dvl::parser::stack_frame::stack_frame(const stack_frame &f):
+		stream_marker(f.stream_marker)
+{
+	cur = f.cur;
+	next = f.next;
+	repeat = f.repeat;
+	repeated = f.repeated;
+	result = f.result;
+
+	if(f.next_insert == &f.result)
+		next_insert = &result;
+	else
+		next_insert = f.next_insert;
+}
 
 void
 dvl::parser::unwind()
@@ -868,7 +875,6 @@ dvl::parser::parser(parser_context &context)
 	stack_frame f(context.str.tellg());
 	f.cur = new output_helper(result, context.builder.get());
 	s.push(f);
-	s.top().init_next_insert();
 }
 
 dvl::parser::~parser()
@@ -943,7 +949,6 @@ dvl::parser::run()
 			nf.cur = context.factory.build_routine(update.child);
 
 			s.push(nf);
-			s.top().init_next_insert();
 
 			// step
 			continue;

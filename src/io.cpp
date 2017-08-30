@@ -7,6 +7,8 @@
 void
 dvl::init_glob_locale()
 {
+	// TODO massive leakage reported by valgrind
+
 	//update default locale with utf8 facet
 	std::locale::global(std::locale(std::locale(""), new std::codecvt_utf8<wchar_t>));
 

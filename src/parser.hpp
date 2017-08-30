@@ -1,6 +1,7 @@
 #ifndef _PARSER_H_
 #define _PARSER_H_
 
+#include "util.hpp"
 #include "id.hpp"
 
 #include <cstdint>
@@ -1744,12 +1745,8 @@ namespace dvl
 				repeat = false;
 				repeated = false;
 			}
-
-			void init_next_insert()
-			{
-				// TODO better alternative to explicit initialization
-				next_insert = &result;
-			}
+		public:
+			stack_frame(const stack_frame &frame);
 		};
 
 		class output_helper : public proutine
@@ -1810,6 +1807,8 @@ namespace dvl
 		~parser();
 
 		void run() throw(parser_exception);
+
+		lnstruct *get_result(){ return result; }
 
 		// routine_interface
 
