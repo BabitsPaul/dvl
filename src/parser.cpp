@@ -694,6 +694,7 @@ struct routine_factory_util
 
 dvl::parser_routine_factory::parser_routine_factory()
 {
+	// TODO transfer initializer into factory-method
 	register_transformation(TYPE_FORK, [](routine* r)->routine_factory_util::parser_fork_routine*{
 		return new routine_factory_util::parser_fork_routine((fork_routine*) r);
 	});

@@ -1404,7 +1404,10 @@ namespace dvl
 		virtual ~routine_interface(){}
 
 		/**
-		 * Sets the repeat-flag for a given parser-routine
+		 * Sets the repeat-flag for a given parser-routine.
+		 *
+		 * Multiple calls to this interface won't have any another effect
+		 * than a single call.
 		 */
 		virtual void repeat() = 0;
 
@@ -1422,7 +1425,7 @@ namespace dvl
 
 		/**
 		 * Runs the specified routine as child of this routine. Multiple calls to this
-		 * method within the same run will of a routine will have the effect of overriding each
+		 * method within the same run of a routine will have the effect of overriding each
 		 * other. Only the last call will have any effect.
 		 *
 		 * Note that this method only accepts "standard"-routines, NOT parser_routines.
@@ -1715,28 +1718,101 @@ namespace dvl
 	// parser
 	//
 
+	// TODO dot-graph in documentation
+
+	/**
+	 * Implements the basic parser that processes the input in accordance with it's provided input.
+	 *
+	 * This class owns any output it produces until it terminates successfully. This means upon
+	 * successful termination the ownership of the output will be transfered to the calling
+	 * method. Otherwise the output will automatically be deallocated by the parser upon
+	 * destruction.
+	 *
+	 * @see parser_context
+	 * @see routine_interface
+	 */
 	class parser : public routine_interface
 	{
 	private:
 		typedef parser_routine_factory::parser_routine proutine;
 
+		/**
+		 * Defines a single stack-frame in the execution-stack of this
+		 * parser.
+		 *
+		 * @see s
+		 */
 		class stack_frame
 		{
 			friend class parser;
 
+			/**
+			 * Constructs a stack-frame with a fixed offset for the input-stream
+			 * in order to reset the stream. This marker will be kept for the
+			 * entire life-time of the struct
+			 *
+			 * @see stream_marker
+			 */
 			stack_frame(int pos): stream_marker(pos){}
 
+			/**
+			 * The routine currently running in this stack-frame
+			 */
 			proutine *cur = nullptr;
+
+			/**
+			 * The routine that is supposed to run after cur
+			 *
+			 * @see cur
+			 */
 			proutine *next = nullptr;
 
+			// TODO flag required???
+			/**
+			 * True if the current routine should be repeated when this stack-frame
+			 * is in execution the next time
+			 */
 			bool repeat = false;
+
+			/**
+			 * Indicates whether the current routine is run for the first time.
+			 * False if the routine ran for the first time, otherwise it is true
+			 *
+			 * @see repeat
+			 */
 			bool repeated = false;
 
+			/**
+			 * Marker for the front-most  output-struct of the level associated with this
+			 * stackframe
+			 *
+			 * @see next_insert
+			 */
 			lnstruct *result = nullptr;
+
+			/**
+			 * Pointer to the next insertion-position. Initially this points
+			 * to @link result, for any further routines it should point to
+			 * the next empty slot.
+			 *
+			 * This pointer can be used for consecutive routines in the same frame.
+			 * This means that in the initial state the pointer points to
+			 * @code cur->get_result()->get_next()
+			 *
+			 * @see lnstruct::get_next()
+			 * @see result
+			 */
 			lnstruct **next_insert = &result;	// start insertion at first position (= result of this frame)
 
+			/**
+			 * Marker to recover the stream-position on which the input-stream
+			 * was when this frame started execution
+			 */
 			const long stream_marker;
 
+			/**
+			 * Switches to the next routine and deallocates the currently active one.
+			 */
 			void switch_to_next_routine()
 			{
 				delete cur;
@@ -1746,37 +1822,113 @@ namespace dvl
 				repeated = false;
 			}
 		public:
+			/**
+			 * Copies a stack-frame. This is required to make sure that
+			 * @link next_insert will point to the correct result-pointer
+			 * (of the new instance) instead of to the old structure.
+			 * All other fields will be copied in a shallow manner.
+			 *
+			 * @see next_insert
+			 */
 			stack_frame(const stack_frame &frame);
 		};
 
+		/**
+		 * Routine required to store the root of the output-tree
+		 * after the routine-execution terminates.
+		 *
+		 * This class will place the root of the parser-graph into the execution-queue
+		 * and place the result in the output-variable of the graph.
+		 *
+		 * @see parser::result
+		 * @see context::builder
+		 */
 		class output_helper : public proutine
 		{
 		private:
+			/**
+			 * Reference to the pointer of the output (required to place output in the
+			 * correct location)
+			 */
 			lnstruct *&ln;
 
+			/**
+			 * The root of the parser-tree. Will be used to kick off the parsing-process
+			 *
+			 * @see parser_context::builder::getdd
+			 */
 			routine *root;
 		public:
+			/**
+			 * Constructs a new output_helper for the specified output-location
+			 * and routine-graph-root
+			 *
+			 * @param ln reference to the storage-location of the output
+			 * @param root the root of the routine-graph
+			 */
 			output_helper(lnstruct *& ln, routine *root):
 				proutine(ROOT),
 				ln(ln),
 				root(root){}
 
+			/**
+			 * Contradicts the definition of @link parser_routine_factory::routine::get_result()
+			 * Do not copy this special behavior, as this routine is a special case
+			 * only used for this specific purpose.
+			 *
+			 * @return a nullpointer
+			 */
 			lnstruct *get_result(){ return nullptr; }	// shouldn't be called
 
+			/**
+			 * Emplaces the result of the child-routine.
+			 *
+			 * In this case the output will be used to store the output.
+			 */
 			void place_child(lnstruct *ln) throw(parser_exception) { this->ln = ln; }
 
+			/**
+			 * Registers the root of the parser-graph in the parser
+			 *
+			 * No check for exceptions!
+			 *
+			 * @param ri the routine_interface on which this routine runs
+			 */
 			void run(routine_interface &ri) throw(parser_exception)	{ ri.run_as_child(root); }
 
 		};
 
+		/**
+		 * Structure to store all updates made to the parser
+		 * by the currently routine.
+		 */
 		struct
 		{
 			friend class parser;
 
+			/**
+			 * This routine will be placed for execution as next routine
+			 * after this routine
+			 */
 			routine *next = nullptr;
+
+			/**
+			 * The routine to execute as child of this routine
+			 */
 			routine *child = nullptr;
+
+			/**
+			 * If set to true, the current routine will be repeated.
+			 */
 			bool repeat = false;
 
+			/**
+			 * Resets the struct to it's initial state
+			 *
+			 * @see next
+			 * @see child
+			 * @see repeat
+			 */
 			void reset()
 			{
 				next = nullptr;
@@ -1785,17 +1937,56 @@ namespace dvl
 			}
 		} update;
 
+		/**
+		 * The stack-frame associated with this parser
+		 *
+		 * @see stack_frame
+		 */
 		std::stack<stack_frame> s;
 
+		/**
+		 * Keeps a copy of the latest exception that was thrown in this
+		 * parser in order to keep child-routines stable.
+		 *
+		 * @see check_child_exception()
+		 */
 		parser_exception *e = nullptr;
 
+		/**
+		 * The context used to configure this parser
+		 *
+		 * @see parser_context
+		 */
 		parser_context &context;
 
+		/**
+		 * The output from the parser will be stored here upon termination
+		 * of the graph.
+		 *
+		 * @see output_helper
+		 */
 		lnstruct *result = nullptr;
 
+		/**
+		 * Unwinds the stack until the next routine to run is found.
+		 * The top-most stack will be popped off irrespectively of other
+		 * constraints
+		 *
+		 * @throw parser_exception if the unwinwding fails
+		 */
 		void unwind() throw(parser_exception);
+
+		/**
+		 * Undinws the stack until the next routine that can handle the failure
+		 * is found
+		 *
+		 * @throw parser_exception if the unwinding fails
+		 */
 		void unwind_ex() throw(parser_exception);
 
+		/**
+		 * Asserts that the stack contains at least the root of the parser-graph
+		 */
 		inline void assert_stack_not_empty()
 			throw(parser_exception)
 		{
@@ -1803,19 +1994,72 @@ namespace dvl
 				throw parser_exception(PARSER, "Invalid operation - stack is empty");
 		}
 	public:
+		/**
+		 * Builds a new parser from the specified parser_context.
+		 *
+		 * @param context the parser_context defining this parsers behavior
+		 * @see parser_context
+		 */
 		parser(parser_context &context) throw(parser_exception);
 		~parser();
 
+		/**
+		 * Starts this parser. Throws an exception if the language provided to the parser
+		 * doesn't contain the input or if the parser fails internally (e.g. state-inconsistencies)
+		 *
+		 * @throw parser_exception if the parser fails
+		 */
 		void run() throw(parser_exception);
 
+		/**
+		 * Returns the output of this parser. If the parser fails a nullpointer will
+		 * be returned. If the parser succeeds the using routine must get the output
+		 * via this method and deallocate it
+		 *
+		 * @return the output of this parser
+		 */
 		lnstruct *get_result(){ return result; }
 
 		// routine_interface
 
+		/**
+		 * Marks the current routine for repetition
+		 *
+		 * @see routine_interface::repeat
+		 * @see update
+		 */
 		void repeat(){ update.repeat = true; }
+
+		/**
+		 * Sets the routine to run as next after the current routine
+		 *
+		 * @param r the routine to run as next on the currently active frame
+		 *
+		 * @see routine_interface::run_as_next(routine*)
+		 * @see update
+		 */
 		void run_as_next(routine *r){ update.next = r; }
+
+		/**
+		 * Sets the routine to run as child of the currently active routine
+		 *
+		 * @param r the routine to run as child of the currently active frame
+		 *
+		 * @see routine_interface::run_as_child(routine*)
+		 * @see update
+		 */
 		void run_as_child(routine *r){ update.child = r; }
 
+		/**
+		 * Checks if the exception-flag is set. If any child-routine of
+		 * the currently active routine (a routine running on a higher
+		 * stack_frame) threw an exception and it wasn't handled before, it
+		 * will be rethrown by this method.
+		 *
+		 * @throws parser_exception if the exception-flag is set
+		 *
+		 * @see routine_interface::check_child_exception()
+		 */
 		void check_child_exception()
 			throw(parser_exception)
 		{
@@ -1823,8 +2067,23 @@ namespace dvl
 				throw *e;
 		}
 
+		/**
+		 * Getter for the input-stream this parser uses.
+		 *
+		 * @return the wistream used by this parser
+		 *
+		 * @see routine_interface::get_istream()
+		 */
 		std::wistream& get_istream(){ return context.str; }
 
+		/**
+		 * Visitor for a stack_trace routines. Will display the currently
+		 * active stack-trace
+		 *
+		 * @param r the stack_trace_routine to display the stack for
+		 *
+		 * @see routine_interface::visit(stack_trace_routine&)
+		 */
 		void visit(stack_trace_routine &r);
 	};
 }

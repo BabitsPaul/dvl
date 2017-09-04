@@ -5,6 +5,7 @@
 #include <iostream>
 #include <vector>
 #include <sstream>
+#include <boost/regex.hpp>
 
 void setup_params(int, char**)
 {
@@ -19,6 +20,18 @@ int main(int argc, char *argv[])
 
 	init_glob_locale();
 
+	// TODO incorporate into util
+	void * array[25];
+	int nSize = backtrace(array, 25);
+	char ** symbols = backtrace_symbols(array, nSize);
+
+	for (int i = 0; i < nSize; i++)
+	{
+		std::cout << symbols[i] << std::endl;
+	}
+
+	free(symbols);
+
 	pid root(5, 5, TYPE_STRUCT),
 			fork(5, 6, TYPE_FORK);
 
@@ -31,7 +44,7 @@ int main(int argc, char *argv[])
 			*b = new string_matcher_routine({0, 0, dvl::TYPE_STRING_MATCHER}, L"Bye"),
 			*e = new echo_routine(L"Success");
 
-	routine_tree_builder rb;
+	routine_tree_builder rb;	// TODO if initialized in try-catch and exception is caught will cause SIGSEGVfire
 
 	pid_table table;
 	parser_routine_factory factory;
