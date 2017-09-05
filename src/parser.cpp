@@ -694,7 +694,28 @@ struct routine_factory_util
 
 dvl::parser_routine_factory::parser_routine_factory()
 {
-	// TODO transfer initializer into factory-method
+
+}
+
+dvl::parser_routine_factory::parser_routine*
+dvl::parser_routine_factory::build_routine(routine* r)
+	throw(parser_exception)
+{
+	if(transformations.find(r->get_pid().get_type()) != transformations.end())
+		return transformations[r->get_pid().get_type()](r);
+	else
+		throw parser_exception(PARSER, "No generator for routine of specified type found");
+}
+
+void
+dvl::parser_routine_factory::register_transformation(uint8_t type, transform t)
+{
+	transformations[type] = t;
+}
+
+void
+dvl::parser_routine_factory::default_config(parser_routine_factory &f)
+{
 	register_transformation(TYPE_FORK, [](routine* r)->routine_factory_util::parser_fork_routine*{
 		return new routine_factory_util::parser_fork_routine((fork_routine*) r);
 	});
@@ -740,22 +761,6 @@ dvl::parser_routine_factory::parser_routine_factory()
 	});
 }
 
-dvl::parser_routine_factory::parser_routine*
-dvl::parser_routine_factory::build_routine(routine* r)
-	throw(parser_exception)
-{
-	if(transformations.find(r->get_pid().get_type()) != transformations.end())
-		return transformations[r->get_pid().get_type()](r);
-	else
-		throw parser_exception(PARSER, "No generator for routine of specified type found");
-}
-
-void
-dvl::parser_routine_factory::register_transformation(uint8_t type, transform t)
-{
-	transformations[type] = t;
-}
-
 //////////////////////////////////////////////////////////////////////////////////////
 // parser
 //
@@ -788,6 +793,9 @@ dvl::parser::unwind()
 
 			s.pop();
 
+			if(s.empty())
+				throw parser_exception(PARSER, "Failed to unwind - only one routine present");
+
 			s.top().cur->ri_place_child(ln);	// chain output
 		}
 
@@ -799,7 +807,7 @@ dvl::parser::unwind()
 
 			s.pop();
 
-			if(!s.empty())	// TODO keep helper?
+			if(!s.empty())
 				s.top().cur->ri_place_child(ln);	// chain output
 		}
 
@@ -884,13 +892,19 @@ dvl::parser::~parser()
 	{
 		stack_frame &f = s.top();
 
+		// destroy any output generated within the frame
+		if(f.result != nullptr)
+			delete f.result;
+		else if(f.cur != nullptr && f.cur->get_result() != nullptr)
+			delete f.cur->get_result();
+
+		// destroy routines in the frame
 		delete f.cur;
 
-		if(f.next != nullptr)
+		if(f.next != nullptr && f.next != f.cur)
 			delete f.next;
 
-		// TODO delete output???
-
+		// next stackframe (if present)
 		s.pop();
 	}
 }

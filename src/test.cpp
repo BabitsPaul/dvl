@@ -719,8 +719,6 @@ public:
 	}
 };
 
-// TODO test-granularity: test state-details in each test
-
 class test_loop_routine_success_intermediate_iter : public test_loop_routine
 {
 public:

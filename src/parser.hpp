@@ -1658,6 +1658,17 @@ namespace dvl
 		 * a parser_routine from a given routine
 		 */
 		void register_transformation(uint8_t type, transform t);
+
+		/**
+		 * Registers the standard-routines with the specified factory
+		 *
+		 * This includes: @link fork_routine, @link empty_routine
+		 * @link loop_routine, @link struct_routine, @link string_matcher_routine,
+		 * @link empty_routine, @link echo_routine, @link stack_trace_routine
+		 *
+		 * @param f the factory to configure with the specified routines
+		 */
+		static void default_config(parser_routine_factory &f);
 	private:
 		/**
 		 * Maps types onto the respective transformation-function
@@ -1767,7 +1778,6 @@ namespace dvl
 			 */
 			proutine *next = nullptr;
 
-			// TODO flag required???
 			/**
 			 * True if the current routine should be repeated when this stack-frame
 			 * is in execution the next time
@@ -1964,6 +1974,7 @@ namespace dvl
 		 * of the graph.
 		 *
 		 * @see output_helper
+		 * @see get_output()
 		 */
 		lnstruct *result = nullptr;
 
@@ -1973,6 +1984,9 @@ namespace dvl
 		 * constraints
 		 *
 		 * @throw parser_exception if the unwinwding fails
+		 *
+		 * @see s
+		 * @see unwind_ex()
 		 */
 		void unwind() throw(parser_exception);
 
@@ -1981,6 +1995,9 @@ namespace dvl
 		 * is found
 		 *
 		 * @throw parser_exception if the unwinding fails
+		 *
+		 * @see s
+		 * @see unwind()
 		 */
 		void unwind_ex() throw(parser_exception);
 
@@ -2001,6 +2018,17 @@ namespace dvl
 		 * @see parser_context
 		 */
 		parser(parser_context &context) throw(parser_exception);
+
+		/**
+		 * Destroys this parser-instance. If the parser didn't terminate
+		 * successful, the parser will yield a nullptr as output and
+		 * destroy any output that was created so far, otherwise the
+		 * ownership of the parsers output will be transferred to the calling
+		 * routine upon successful terminate of @link run
+		 *
+		 * @see run
+		 * @see result
+		 */
 		~parser();
 
 		/**
