@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
 	init_glob_locale();
 
 	// TODO incorporate into util
-	void * array[25];
+	/*void * array[25];
 	int nSize = backtrace(array, 25);
 	char ** symbols = backtrace_symbols(array, nSize);
 
@@ -31,6 +31,7 @@ int main(int argc, char *argv[])
 	}
 
 	free(symbols);
+	*/
 
 	pid root(5, 5, TYPE_STRUCT),
 			fork(5, 6, TYPE_FORK);
@@ -38,11 +39,7 @@ int main(int argc, char *argv[])
 	util::print_stacktrace(std::cout);	// TODO no stacktrace printed
 
 	std::wstringstream wss;
-	wss << L"Hello";
-
-	routine *h = new string_matcher_routine({0, 0, dvl::TYPE_STRING_MATCHER}, L"Hello"),
-			*b = new string_matcher_routine({0, 0, dvl::TYPE_STRING_MATCHER}, L"Bye"),
-			*e = new echo_routine(L"Success");
+	wss << L"Hello123";
 
 	routine_tree_builder rb;	// TODO if initialized in try-catch and exception is caught will cause SIGSEGVfire
 
@@ -50,15 +47,24 @@ int main(int argc, char *argv[])
 	parser_routine_factory factory;
 	parser_context pc(wss, rb, table, factory);
 
+	parser_routine_factory::default_config(factory);
+
+	charset_routine *r1 = new charset_routine({0, 0, TYPE_CHARSET}, L"[a-zA-Z]{3,}"),
+					*r2 = new charset_routine({0, 0, TYPE_CHARSET}, L"[0-9]?");
+	string_matcher_routine *r3 = new string_matcher_routine({0, 0, TYPE_STRING_MATCHER}, L"23");
+
 	try{
-		rb.fork(fork).mark_root().push_checkpoint()
-				.set_insertion_mode(routine_tree_builder::insertion_mode::AS_FORK)
-				.by_ptr(b).pop_checkpoint().push_checkpoint()
-				.set_insertion_mode(routine_tree_builder::insertion_mode::AS_FORK)
-				.logic(root).set_insertion_mode(routine_tree_builder::insertion_mode::AS_CHILD).push_checkpoint()
-				.by_ptr(h).pop_checkpoint().set_insertion_mode(routine_tree_builder::insertion_mode::AS_NEXT)
-				.logic(root).set_insertion_mode(routine_tree_builder::AS_CHILD)
-				.by_ptr(e);
+		rb.logic({0, 0, TYPE_STRUCT}).mark_root().push_checkpoint()
+				.set_insertion_mode(routine_tree_builder::insertion_mode::AS_CHILD)
+				.by_ptr(r1).pop_checkpoint()
+				.set_insertion_mode(routine_tree_builder::insertion_mode::AS_NEXT)
+				.logic({0, 0, TYPE_STRUCT}).push_checkpoint()
+				.set_insertion_mode(routine_tree_builder::insertion_mode::AS_CHILD)
+				.by_ptr(r2).pop_checkpoint()
+				.set_insertion_mode(routine_tree_builder::insertion_mode::AS_NEXT)
+				.logic({0, 0, TYPE_STRUCT}).push_checkpoint()
+				.set_insertion_mode(routine_tree_builder::insertion_mode::AS_CHILD)
+				.by_ptr(r3);
 
 		parser p(pc);
 		p.run();

@@ -206,6 +206,7 @@ namespace dvl
 		 * 		<tr><td>@link TYPE_LOOP</td>	<td>"TYPE_LOOP"</td></tr>
 		 * 		<tr><td>@link TYPE_STRUCT</td>	<td>"TYPE_STRUCT"</td></tr>
 		 * 		<tr><td>@link TYPE_FIXED</td>	<td>"TYPE_FIXTED"</td></tr>
+		 * 		<tr><td>@link TYPE_CHARSET</td> <td>"TYPE_CHARSET"</td></tr>
 		 * </table>
 		 *
 		 * @see get_type
@@ -388,9 +389,19 @@ namespace dvl
 	 * @see pid
 	 * @see pid_table
 	 * @see empty_routine
-	 * @see pid__table.types
+	 * @see pid_table.types
 	 */
 					TYPE_EMPTY = 5,
+
+	/**
+	 * type-identifier associated with charset-routines
+	 *
+	 * @see pid
+	 * @see pid_table
+	 * @see charset_routine
+	 * @see pid_table.types
+	 */
+					TYPE_CHARSET = 6,
 	/**
 	 * the type-identifier associated with internal ids used for the
 	 * parser itself and diagnostic routines.
@@ -1062,8 +1073,6 @@ namespace dvl
 	// string matcher routine
 	//
 
-	//FEATURE: expand functionality by char-sets, regex, etc.
-
 	/**
 	 * Defines a string-matcher-routine that will terminate successfully if the
 	 * sequence of bytes in the input-stream matches the string specified within this
@@ -1114,6 +1123,140 @@ namespace dvl
 	public:
 		stack_trace_routine():
 			routine(STACK_TRACE){}
+	};
+
+	////////////////////////////////////////////////////////////////////////////////////
+	// charset_routine
+	//
+
+	/**
+	 * Provides a method to match a charset within the input-stream and allows both
+	 * fixed and arbitrary repetition of said characters.
+	 *
+	 * The syntax of the definition is (backspace denotes semantic operators):
+	 * 					\[<charset>\]<repetition>?
+	 * <charset> := 	\(<char-range>\|<char>\)<charset>\?
+	 * <char-range> := 	<char>-<char>
+	 * <char> :=		any character, where brackets and backslashes need to be escaped
+	 * <repetition> :=	{<num-opt>,<num-opt>}|*|?|+
+	 * <num-opt> :=		either no input or a positive integer
+	 *
+	 * If not specified otherwise via repetition, the charset will default to exactly one
+	 * match. If specified in the defintion the lower bound must always be smaller than the
+	 * upper-bound. It is valid to ommit either of the parameters, which will automatically fall
+	 * back to default-behavior. Lower bounds will automatically be replaced by 0, missing upper
+	 * bounds will be replaced by infinity. Alternatively one can specify
+	 * the number of valid repetitions via * (no bounds), + (at least one), or ? (at most one).
+	 * If the {<num-opt>,<num-opt>}-construct is used, the comma must be present irrespective of
+	 * whether any numbers are present in the brackets (note that {,} is equivalent to *).
+	 * The upper bound of num-opt is @c 2^32 and the value must be specified in decimal.
+	 *
+	 * For charsets the lower bound must have a strictly lower value in the
+	 * used charset than the upper bound. Both are used inclusively. I.e. "A-A" and A are
+	 * interpreted as equivalent. Special characters must be escaped by a \. This applies to the
+	 * following characters: \, [, ]. Also the standard escape-sequences are valid. The character-set
+	 * must not be empty.
+	 *
+	 * There may be an arbitrarily large number of spaces or tabs before the charset-definition,
+	 * between the charset-definition and the repetition-specification and after the
+	 * repetition-specification.
+	 *
+	 * Violating any of the above listed rules will result in a parser_exception being
+	 * thrown upon initialization.
+	 *
+	 * @see TYPE_CHARSET
+	 */
+	class charset_routine : public routine
+	{
+	private:
+		/**
+		 * The definition of this routines matched chars as plain text
+		 */
+		std::wstring def;
+
+		/**
+		 * The function used to match chars against the char-set defined for
+		 * this routine
+		 *
+		 * @see init_matcher
+		 * @see def
+		 */
+		std::function<bool(wchar_t c)> matcher;
+
+		/**
+		 * Minimum number of valid repetitions
+		 */
+		unsigned int min_repetition;
+
+		/**
+		 * Maximum number of valid repetitions
+		 */
+		unsigned int max_repetition;
+
+		/**
+		 * Initializes the routine and processes the string-representation of the routine
+		 * into a matcher-functor.
+		 *
+		 * @see matcher
+		 * @see def
+		 * @see charset_routine(pid, std::wstring)
+		 */
+		static void init_matcher(charset_routine&) throw(parser_exception);
+	public:
+		/**
+		 * Defines the infinity-value for unsigned int. Note that the maximum-value
+		 * for unsigned int will always be interpreted as @c _INFINITY irrespective of
+		 * context!
+		 *
+		 * @see min_repetition
+		 * @see max_repetition
+		 */
+		static const unsigned int _INFINITY = ~0;
+
+		/**
+		 * Constructs a new charset_routine with the provided defintion,
+		 * which will be subsequently parsed in @link init_matcher(charset_routine&)
+		 *
+		 * @param id the id of the routine
+		 * @param def the definition of the charset (see @link charset_routine)
+		 * @throws parser_exception if either the id or the definition are invalid
+		 *
+		 * @see init_matcher(charset_routine&)
+		 * @see get_matcher()
+		 */
+		charset_routine(pid id, std::wstring def) throw(parser_exception):
+			routine(id),
+			def(def)
+		{
+			init_matcher(*this);
+		}
+
+		/**
+		 * Getter for @link matcher
+		 *
+		 * @return a functor to determine whether a char belongs to the charset
+		 *
+		 * @see matcher
+		 */
+		std::function<bool(wchar_t)>& get_matcher(){ return matcher; }
+
+		/**
+		 * Getter for the number of minimum-repetitions.
+		 *
+		 * @return the value of @c min_repetition
+		 * @see min_repetition
+		 * @see _INFINITY
+		 */
+		const unsigned int &get_min_repetitions(){ return min_repetition; }
+
+		/**
+		 * Getter for the number of maximum-repetitions.
+		 *
+		 * @return the value of @c max_repetition
+		 * @see max_repetition
+		 * @see _INFINITY
+		 */
+		const unsigned int &get_max_repetitions(){ return max_repetition; }
 	};
 
 	/////////////////////////////////////////////////////////////////////////////////

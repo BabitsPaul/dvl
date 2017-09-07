@@ -3,6 +3,7 @@
 #include <queue>
 #include <cstdlib>
 #include <set>
+#include <memory>
 
 ////////////////////////////////////////////////////////////////////////////////
 // id
@@ -17,7 +18,8 @@ dvl::pid_table::types = {{TYPE_INTERNAL,			L"TYPE_INTERNAL"},
 					 	 {TYPE_LOOP,				L"TYPE_LOOP"},
 					 	 {TYPE_STRUCT,				L"TYPE_STRUCT"},
 					 	 {TYPE_STRING_MATCHER,		L"TYPE_STRING_MATCHER"},
-						 {TYPE_EMPTY,				L"TYPE_EMPTY"}};
+						 {TYPE_EMPTY,				L"TYPE_EMPTY"},
+						 {TYPE_CHARSET, 			L"TYPE_CHARSET"}};
 
 dvl::pid_table::pid_table()
 {
@@ -163,6 +165,290 @@ dvl::lnstruct::is_tree()
 	}
 
 	return true;
+}
+
+/////////////////////////////////////////////////////////////////////////////////
+// charset_routine
+//
+
+void
+dvl::charset_routine::init_matcher(charset_routine &r)
+	throw(parser_exception)
+{
+	const wchar_t *def_str = r.def.c_str();
+	const wchar_t *end = def_str + r.def.length();
+
+	// spaces
+	for(; def_str < end; def_str++)
+		if(*def_str != L' ' && *def_str != L'\t')
+			break;
+
+	// start of charset-definition
+	if(*def_str != L'[')
+		throw parser_exception(r.get_pid(), "Invalid charset-definition: unexpected character");
+
+	def_str++;
+
+	if(def_str == end)
+		throw parser_exception(r.get_pid(), "Unexpected end of definition");
+
+	// charset definition extraction
+	const wchar_t *start_def = def_str,
+					*end_def = nullptr;
+
+	bool escaped = false;
+	for(; def_str < end; def_str++)
+	{
+		if(*def_str == L']' && !escaped)
+		{
+			// found end of definition
+			end_def = def_str - 1;
+			def_str++;
+			break;
+		}
+		else if(*def_str == L'\\')
+			escaped = !escaped;
+		else
+			escaped = false;
+	}
+
+	if(end_def == start_def)
+		throw parser_exception(r.get_pid(), "The characterset mustn't be empty");
+
+	if(end_def == nullptr)
+		throw parser_exception(r.get_pid(), "Unterminated charset definition");
+
+	// transform escape-sequences
+	std::vector<wchar_t*> cr_first;
+
+	wchar_t *rep_str = new wchar_t[end_def - start_def];
+
+	wchar_t *o = rep_str;
+	const wchar_t *c = start_def;
+
+	escaped = false;
+	while(c <= end_def)
+	{
+		if(*c == L'\\')
+		{
+			if(escaped)
+				*o++ = *c;
+
+			escaped = !escaped;
+		}
+		else if(escaped)
+		{
+			if(*c == L'-' || *c == L']' || *c == L'[')
+			{
+				*o++ = *c;
+			}
+			else if(*c == L'U')
+			{
+				if(c + 8 > end_def)
+				{
+					delete rep_str;
+					throw parser_exception(r.get_pid(), "Incomplete character-name");
+				}
+
+				std::wstring def(c, 8);
+				unsigned int num = std::stoi(def, nullptr, 16);
+
+				*o++ = (wchar_t) num;
+
+				c += 8;
+			}
+			else if(*c == L'u')
+			{
+				if(c + 4 > end_def)
+				{
+					delete rep_str;	// TODO replace by unique-ptr or vector???
+					throw parser_exception(r.get_pid(), "Incomplete character-name");
+				}
+
+				std::wstring def(c, 4);
+				unsigned int num = std::stoi(def, nullptr, 16);
+
+				*o++ = (wchar_t) num;
+
+				c += 4;
+			}
+			else
+			{
+				// TODO support \s???
+				switch(*c)
+				{
+				case L'a':
+					*o++ = L'\a';
+					break;
+				case L'b':
+					*o++ = L'\b';
+					break;
+				case L'f':
+					*o++ = L'\f';
+					break;
+				case L'n':
+					*o++ = L'\n';
+					break;
+				case L'r':
+					*o++ = L'\r';
+					break;
+				case L't':
+					*o++ = L'\t';
+					break;
+				case L'v':
+					*o++ = L'\t';
+					break;
+				default:
+					delete rep_str;
+					throw parser_exception(r.get_pid(), "Unknown escape-sequence");
+				}
+			}
+
+			escaped = false;
+		}
+		else
+		{
+			if(*c == L'-')
+				cr_first.emplace_back(o - 1);
+			else if(*c == L'[')
+			{
+				delete rep_str;
+				throw parser_exception(r.get_pid(), "Unescaped [ in charset-definition");
+			}
+			else
+				*o++ = *c;
+		}
+
+		c++;
+	}
+
+	// check char-ranges for correctness
+	if(!cr_first.empty())
+	{
+		wchar_t *last = cr_first[0];
+		for(auto it = cr_first.begin() + 1; it != cr_first.end(); it++)
+			if(*it - last < 2)
+			{
+				delete rep_str;
+				throw parser_exception(r.get_pid(), "Invalid char-range definition");
+			}
+	}
+
+
+	// process definition sequence
+	cr_first.emplace_back(o);	// dummy value
+
+	wchar_t *rs = rep_str;
+	auto it = cr_first.begin();
+
+	std::set<wchar_t> single;
+	std::vector<std::pair<wchar_t, wchar_t>> cr;
+
+	while(rs < o)
+	{
+		if(*it < rs)
+			it++;
+
+		if(*it == rs)
+		{
+			if(rs + 1 >= o)
+			{
+				delete rep_str;
+				throw parser_exception(r.get_pid(), "Incomplete char-range");
+			}
+			else
+			{
+				cr.emplace_back(std::make_pair(*rs, *(rs + 1)));
+				rs += 2;
+			}
+		}
+		else
+		{
+			single.emplace(*rs);
+			rs++;
+		}
+	}
+
+	delete rep_str;
+
+	// validate char-ranges
+	if(std::find_if(cr.begin(), cr.end(), [](auto v){ return v.second < v.first; }) != cr.end())
+		throw parser_exception(r.get_pid(), "Range out of order");
+
+	// function
+	r.matcher = [&, single, cr](wchar_t c)->bool{
+		return single.find(c) != single.end() ||
+				std::find_if(cr.begin(), cr.end(), [c](auto v)->bool{
+					return v.first <= c && c <= v.second;
+				}) != cr.end();
+	};
+
+	// spaces
+	for(; def_str < end; def_str++)
+		if(*def_str != L' ' && *def_str != L'\t')
+			break;
+
+	// extract repetition-specification
+	c = def_str;
+	if(c == end)
+		r.min_repetition = r.max_repetition = 1;
+	else if(*c == L'*')
+	{
+		r.min_repetition = 0;
+		r.max_repetition = _INFINITY;
+	}
+	else if(*c == L'+')
+	{
+		r.min_repetition = 1;
+		r.max_repetition = _INFINITY;
+	}
+	else if(*c == L'?')
+	{
+		r.min_repetition = 0;
+		r.max_repetition = 1;
+	}
+	else if(*c == L'{')
+	{
+		const wchar_t *open = c;
+
+		for(; c < end && *c != L','; c++);
+		const wchar_t *comma = c;
+		if(*comma != L',')
+			throw parser_exception(r.get_pid(), "Separator not found in repetiion-specification");
+
+		for(; c < end && *c != L'}'; c++);
+		const wchar_t *close = c;
+		if(*close != L'}')
+			throw parser_exception(r.get_pid(), "Terminator not found in repetition-specification");
+
+		if(open + 1 == comma)
+			r.min_repetition = 0;
+		else
+			try{
+				r.min_repetition = std::stoi(std::wstring(open + 1, comma - open - 1));
+			}catch(const std::out_of_range &e)
+			{
+				throw parser_exception(r.get_pid(), "Lower bound is too large");
+			}catch(const std::invalid_argument &e)
+			{
+				throw parser_exception(r.get_pid(), "Failed to convert lower bound to integer");
+			}
+
+		if(comma + 1 == close)
+			r.max_repetition = _INFINITY;
+		else
+			try{
+				r.max_repetition = std::stoi(std::wstring(comma + 1, close - comma - 1));
+			}catch(const std::out_of_range &e)
+			{
+				throw parser_exception(r.get_pid(), "Upper bound is too large");
+			}catch(const std::invalid_argument &e)
+			{
+				throw parser_exception(r.get_pid(), "Failed to convert upper bound to integer");
+			}
+	}
+	else
+		throw parser_exception(r.get_pid(), "Expected repetition-specification");
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -690,6 +976,59 @@ struct routine_factory_util
 			ri.visit(*r);
 		}
 	};
+
+	class parser_charset_routine : public base_routine
+	{
+	private:
+		dvl::charset_routine *r;
+
+		dvl::lnstruct *ln;
+	public:
+		parser_charset_routine(dvl::charset_routine *r) :
+			base_routine(r->get_pid()),
+			r(r),
+			ln(nullptr)
+		{}
+
+		dvl::lnstruct *get_result()
+		{
+			return ln;
+		}
+
+		void place_child(dvl::lnstruct *)
+			throw(dvl::parser_exception)
+		{
+			throw dvl::parser_exception(get_pid(), dvl::parser_exception::lnstruct_invalid_insertion("parser_charset_routine"));
+		}
+
+		void run(dvl::routine_interface &ri)
+			throw(dvl::parser_exception)
+		{
+			ln = new dvl::lnstruct(get_pid(), ri.get_istream().tellg());
+
+			unsigned int ct = 0;
+			while(ct < r->get_max_repetitions() || r->get_max_repetitions() == dvl::charset_routine::_INFINITY)
+			{
+				auto pos = ri.get_istream().tellg();
+				wint_t c =  ri.get_istream().get();
+
+				if(c == WEOF)
+					break;
+				else if(r->get_matcher()((wchar_t) c))
+					ct++;
+				else
+				{
+					// mismatch, reset to before mismatch
+					ri.get_istream().seekg(pos, std::ios::beg);
+					break;
+				}
+			}
+
+			// check if output is in required repetition-range
+			if(ct < r->get_min_repetitions())
+				throw dvl::parser_exception(get_pid(), "No full match found");
+		}
+	};
 };
 
 dvl::parser_routine_factory::parser_routine_factory()
@@ -716,27 +1055,31 @@ dvl::parser_routine_factory::register_transformation(uint8_t type, transform t)
 void
 dvl::parser_routine_factory::default_config(parser_routine_factory &f)
 {
-	register_transformation(TYPE_FORK, [](routine* r)->routine_factory_util::parser_fork_routine*{
+	f.register_transformation(TYPE_FORK, [](routine* r)->routine_factory_util::parser_fork_routine*{
 		return new routine_factory_util::parser_fork_routine((fork_routine*) r);
 	});
 
-	register_transformation(TYPE_EMPTY, [](routine*)->routine_factory_util::parser_empty_routine*{
+	f.register_transformation(TYPE_EMPTY, [](routine*)->routine_factory_util::parser_empty_routine*{
 		return new routine_factory_util::parser_empty_routine();
 	});
 
-	register_transformation(TYPE_LOOP, [](routine* r)->routine_factory_util::parser_loop_routine*{
+	f.register_transformation(TYPE_LOOP, [](routine* r)->routine_factory_util::parser_loop_routine*{
 		return new routine_factory_util::parser_loop_routine((loop_routine*) r);
 	});
 
-	register_transformation(TYPE_STRUCT, [](routine *r)->routine_factory_util::parser_struct_routine*{
+	f.register_transformation(TYPE_STRUCT, [](routine *r)->routine_factory_util::parser_struct_routine*{
 		return new routine_factory_util::parser_struct_routine((struct_routine*) r);
 	});
 
-	register_transformation(TYPE_STRING_MATCHER, [](routine *r)->routine_factory_util::parser_matcher_routine*{
+	f.register_transformation(TYPE_STRING_MATCHER, [](routine *r)->routine_factory_util::parser_matcher_routine*{
 		return new routine_factory_util::parser_matcher_routine((string_matcher_routine*) r);
 	});
 
-	register_transformation(TYPE_INTERNAL, [](routine *r)->parser_routine_factory::parser_routine*{
+	f.register_transformation(TYPE_CHARSET, [](routine *r)->routine_factory_util::parser_charset_routine*{
+		return new routine_factory_util::parser_charset_routine((charset_routine*) r);
+	});
+
+	f.register_transformation(TYPE_INTERNAL, [](routine *r)->parser_routine_factory::parser_routine*{
 		switch(r->get_pid().get_group())
 		{
 		case GROUP_INTERNAL:
