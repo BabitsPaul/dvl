@@ -15,11 +15,12 @@
 #include <functional>
 #include <map>
 #include <stack>
+#include <set>
 
 namespace dvl
 {
 	////////////////////////////////////////////////////////////////////////////
-	// routine indentifier
+	// routine identifier
 	//
 
 	/**
@@ -206,7 +207,6 @@ namespace dvl
 		 * 		<tr><td>@link TYPE_LOOP</td>	<td>"TYPE_LOOP"</td></tr>
 		 * 		<tr><td>@link TYPE_STRUCT</td>	<td>"TYPE_STRUCT"</td></tr>
 		 * 		<tr><td>@link TYPE_FIXED</td>	<td>"TYPE_FIXTED"</td></tr>
-		 * 		<tr><td>@link TYPE_CHARSET</td> <td>"TYPE_CHARSET"</td></tr>
 		 * </table>
 		 *
 		 * @see get_type
@@ -734,10 +734,6 @@ namespace dvl
 		 */
 		std::wstring structure(pid_table &pt, std::wstring indent=L"") const
 		{
-			// TODO purpose???
-			// if(this == nullptr)
-			//	return L"Error - Nullptr as this\n";
-
 			std::wstring result = L"";
 			result.append(indent);
 			result.append(pt.to_string(id, true));
@@ -1354,6 +1350,15 @@ namespace dvl
 		insertion_mode ins_mode = insertion_mode::NONE;
 
 		/**
+		 * Set of routines that were marked as finalized. Finalized
+		 * routines may not be manipulated anymore. This is useful to define sub-modules,
+		 * while preventing accidential rewriting of the structure
+		 *
+		 * @see finalize(std::wstring)
+		 */
+		std::set<routine*> finalized;
+
+		/**
 		 * Inserts the specified routine into the tree
 		 * in relation to the last routine r, as specified by
 		 * ins_mode. Used by loop(pid, unsigned int, unsigned int), fork(pid),
@@ -1409,7 +1414,7 @@ namespace dvl
 
 		/**
 		 * Assigns the specified name to the currently active routine. Note that
-		 * routines are unique identifiers within the context of a single
+		 * names are unique identifiers within the context of a single
 		 * routine_tree_builder. This means that assigning the same name to two
 		 * routines will result in the second routine owning the name and the first
 		 * routine remaining unnamed. A routine may have multiple names.
@@ -1525,6 +1530,57 @@ namespace dvl
 		 * @see r
 		 */
 		routine* get_current();
+
+		/**
+		 * Detaches the last worked on subgraph from this builders active state.
+		 * After this action a new subgraph that is disconnected from the original graph
+		 * can be built up.
+		 *
+		 * @see r
+		 */
+		routine_tree_builder &detach();
+
+		/**
+		 * Emplaces a routine by it's name. The builder won't step into the sub-routine in order
+		 * to avoid violating the state of the routine.
+		 *
+		 * @see operator[](std::wstring)
+		 * @see name()
+		 */
+		routine_tree_builder &by_name(std::wstring name) throw(parser_exception);
+
+		/**
+		 * Prevents a named routine from being modified any further. This includes that it
+		 * is disallowed to traverse the graph from the routine by any means.
+		 *
+		 * @param name the name of the routine to finalize
+		 */
+		routine_tree_builder &finalize(std::wstring name) throw(parser_exception);
+
+		/**
+		 * Generates and inserts a new string_matcher_routine in the routine-graph
+		 * that will match the specified string (@p match)
+		 *
+		 * @param id the pid of the matcher-routine
+		 * @param match the string to match
+		 *
+		 * @see r
+		 * @see insert_node(routine*)
+		 * @see string_matcher_routine
+		 */
+		routine_tree_builder &match_string(pid id, std::wstring match);
+
+		/**
+		 * Generates and inserts a new charset_routine in the routine_graph.
+		 *
+		 * @param id the pid of the charset_routine
+		 * @param set_def the definition of the matched character-set
+		 *
+		 * @see r
+		 * @see insert_node(routine*)
+		 * @see charset_routine
+		 */
+		routine_tree_builder &match_set(pid id, std::wstring set_def);
 	};
 
 	////////////////////////////////////////////////////////////////////////////////////

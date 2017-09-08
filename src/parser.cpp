@@ -469,12 +469,11 @@ dvl::routine_tree_builder::insert_node(routine *rn)
 			r = rn;
 			return;
 		}
+		else if(finalized.find(r) != finalized.end())
+			throw parser_exception(PARSER, "Routine is marked as non-modifiable");
 
 		if(rn == nullptr)
-		{
-			delete rn;
 			throw parser_exception(PARSER, "No routine specified");
-		}
 
 		switch(ins_mode)
 		{
@@ -646,6 +645,68 @@ dvl::routine_tree_builder::get_current()
 	return r;
 }
 
+dvl::routine_tree_builder&
+dvl::routine_tree_builder::detach()
+{
+	// reset the currently-active-ptr to the nullptr
+	r = nullptr;
+
+	return *this;
+}
+
+dvl::routine_tree_builder&
+dvl::routine_tree_builder::by_name(std::wstring name)
+	throw(parser_exception)
+{
+	auto it = name_table.find(name);
+
+	if(it == name_table.end())
+		throw parser_exception(PARSER, "No routine with this name is registered");
+
+	insert_node(it->second);
+	r = it->second;
+
+	return *this;
+}
+
+dvl::routine_tree_builder&
+dvl::routine_tree_builder::finalize(std::wstring name)
+	throw(parser_exception)
+{
+	auto it = name_table.find(name);
+
+	if(it == name_table.end())
+		throw parser_exception(PARSER, "No routine with this name is registered");
+
+	finalized.emplace(it->second);
+
+	return *this;
+}
+
+dvl::routine_tree_builder&
+dvl::routine_tree_builder::match_string(pid id, std::wstring match)
+{
+	routine *rn = new string_matcher_routine(id, match);
+	insert_node(rn);
+
+	ins_mode = insertion_mode::NONE;
+	r = rn;
+
+	return *this;
+}
+
+dvl::routine_tree_builder&
+dvl::routine_tree_builder::match_set(pid id, std::wstring set_def)
+{
+	routine *rn = new charset_routine(id, set_def);
+	insert_node(rn);
+
+	ins_mode = insertion_mode::NONE;
+	r = rn;
+
+	return *this;
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////
 // parser_routine_factory
 //
@@ -653,7 +714,7 @@ dvl::routine_tree_builder::get_current()
 /**
  * just an implementation of the standard-types implemented as default. This structure
  * solely serves to keep implementations of parser_routine from floating freely in the code.
- * It should be considered as a collection of utilies or a separate namespace
+ * It should be considered as a collection of utilities or a separate namespace
  *
  * @see dvl::parser_routine_factory
  */
