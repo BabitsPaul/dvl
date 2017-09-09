@@ -20,23 +20,8 @@ int main(int argc, char *argv[])
 
 	init_glob_locale();
 
-	// TODO incorporate into util
-	/*void * array[25];
-	int nSize = backtrace(array, 25);
-	char ** symbols = backtrace_symbols(array, nSize);
-
-	for (int i = 0; i < nSize; i++)
-	{
-		std::cout << symbols[i] << std::endl;
-	}
-
-	free(symbols);
-	*/
-
 	pid root(5, 5, TYPE_STRUCT),
 			fork(5, 6, TYPE_FORK);
-
-	util::print_stacktrace(std::cout);	// TODO no stacktrace printed
 
 	std::wstringstream wss;
 	wss << L"Hello123";
