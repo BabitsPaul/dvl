@@ -16,6 +16,7 @@
 #include <string>
 #include <exception>
 #include <iostream>
+#include <sstream>
 
 namespace util
 {
@@ -34,7 +35,11 @@ namespace util
 	std::string	demangle(std::string mangled_name)
 		throw(std::exception, std::bad_alloc, std::bad_typeid);
 
-	void print_stacktrace(std::ostream &str, unsigned int max_frames = 63);
+	void print_stacktrace(std::ostream &str, unsigned int max_frames = 63, unsigned int ignore_top = 0);
+
+	/////////////////////////////////////////////////////////////////////////////////////
+	// object-lifetime-logger
+	//
 
 	// TODO specify stream
 	/**
@@ -47,7 +52,7 @@ namespace util
 	template<bool log, typename T>
 	class life_time_log
 	{
-	protected:
+	private:
 		life_time_log(){}
 		life_time_log(const life_time_log&){}
 		life_time_log(life_time_log&&){}
@@ -58,7 +63,7 @@ namespace util
 	template<typename T>
 	class life_time_log<true, T>
 	{
-	protected:
+	private:
 		life_time_log()
 		{
 			std::cout << "Allocating new instance of " << demangle(typeid(T).name()) << std::endl;
@@ -89,6 +94,43 @@ namespace util
 
 	template<typename T>
 	class life_time_log_global : private life_time_log<_LIFE_TIME_TRACE_FLAG, T>{};
+
+	////////////////////////////////////////////////////////////////////////////////////////
+	// stack_trace_provider
+	//
+
+	template<bool active>
+	class _stack_trace_provider
+	{
+	private:
+		_stack_trace_provider(){}
+	};
+
+	template<>
+	class _stack_trace_provider<true>
+	{
+	private:
+		std::string stack;
+
+		_stack_trace_provider(){
+			std::stringstream ss;
+			print_stacktrace(ss);
+
+			ss >> stack;
+		}
+	public:
+		virtual ~_stack_trace_provider(){}
+	protected:
+		const std::string get_stack_trace(){ return stack; }
+	};
+
+#ifdef STACK_TRACE_PROVIDER
+	#define _STACK_TRACE_ENABLED true
+#else
+	#define _STACK_TRACE_ENABLED false
+#endif
+
+	class stack_trace_provider : private _stack_trace_provider<_STACK_TRACE_ENABLED>{};
 }
 #endif // _STACKTRACE_H_
 

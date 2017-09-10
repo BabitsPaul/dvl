@@ -14,7 +14,7 @@ void
 util::print_stacktrace(std::ostream &str, unsigned int max_frames, unsigned int ignore_top)
 {
 	void **buffer = new void*[max_frames];
-	int ct = backtrace(buffer, max_frames);
+	unsigned int ct = backtrace(buffer, max_frames);
 	char **frames = backtrace_symbols(buffer, max_frames);
 
 	// failed to read frames
