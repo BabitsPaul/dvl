@@ -405,6 +405,8 @@ namespace dvl
 					TYPE_CHARSET = 6,
 
 	/**
+	 * <em> Reserved for future use. At the moment this type remains unused, but reserved </em>
+	 *
 	 * type-identifier associated with regex-routines
 	 *
 	 * @see pid
@@ -415,6 +417,16 @@ namespace dvl
 	 * TODO mark for future use (doxygen tag???)
 	 */
 					TYPE_REGEX = 7,
+
+	/**
+	 * type-identifier associated with lambda_routines
+	 *
+	 * @see pid
+	 * @see pid_table
+	 * @see pid_table.types
+	 * @see lambda_routine
+	 */
+					TYPE_LAMBDA = 8,
 	/**
 	 * the type-identifier associated with internal ids used for the
 	 * parser itself and diagnostic routines.
@@ -1280,6 +1292,8 @@ namespace dvl
 	//
 
 	/**
+	 * <em>For future use! At the moment this class is not used by the implementation. </em>
+	 *
 	 * Routine that matches the stream starting from the given position against the
 	 * specified regex. The regex must match starting from the current posiion of the
 	 * input-stream in order for the routine to succeed.
@@ -1315,6 +1329,30 @@ namespace dvl
 		 * @see reg
 		 */
 		const boost::wregex& get_reg(){ return reg; }
+	};
+
+	/////////////////////////////////////////////////////////////////////////////////
+	// lambda-routine
+	//
+
+	class routine_interface;
+
+	class lambda_routine : public routine
+	{
+	public:
+		typedef std::function<void(routine_interface&) throw(parser_exception)> p_func;
+	private:
+		p_func f;
+	public:
+		lambda_routine(pid id, p_func f):
+			routine(id),
+			f(f)
+		{
+			if(id.get_type() != TYPE_LAMBDA)
+				throw parser_exception(id, parser_exception::invalid_pid("lambda_routine"));
+		}
+
+		p_func &get_f(){ return f; }
 	};
 
 	/////////////////////////////////////////////////////////////////////////////////
@@ -1643,6 +1681,19 @@ namespace dvl
 		 * @see charset_routine
 		 */
 		routine_tree_builder &match_set(pid id, std::wstring set_def);
+
+		/**
+		 * Generates and inserts a new lambda-routine in the routine-graph.
+		 *
+		 * @param id the pid of the lambda-routine
+		 * @param f the parsering-function of the routinne
+		 * @return @c *this
+		 *
+		 * @see r
+		 * @see insert_node(routine*)
+		 * @see lambda_routine
+		 */
+		routine_tree_builder &lambda(pid id, lambda_routine::p_func f);
 	};
 
 	////////////////////////////////////////////////////////////////////////////////////

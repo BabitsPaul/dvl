@@ -721,6 +721,18 @@ dvl::routine_tree_builder::match_set(pid id, std::wstring set_def)
 	return *this;
 }
 
+dvl::routine_tree_builder&
+dvl::routine_tree_builder::lambda(pid id, lambda_routine::p_func f)
+{
+	routine *rn = new lambda_routine(id, f);
+	insert_node(rn);
+
+	ins_mode = insertion_mode::NONE;
+	r = rn;
+
+	return *this;
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////
 // parser_routine_factory
 //
@@ -1102,6 +1114,35 @@ struct routine_factory_util
 			// check if output is in required repetition-range
 			if(ct < r->get_min_repetitions())
 				throw dvl::parser_exception(get_pid(), "No full match found");
+		}
+	};
+
+	class parser_lambda_routine : public base_routine
+	{
+	private:
+		dvl::lambda_routine::p_func f;
+
+		dvl::lnstruct *ln;
+	public:
+		parser_lambda_routine(dvl::lambda_routine *r) :
+			base_routine(r->get_pid()),
+			f(r->get_f()),
+			ln(nullptr){}
+
+		dvl::lnstruct *get_result()
+		{
+			return ln;
+		}
+
+		void place_child(dvl::lnstruct *)
+			throw(dvl::parser_exception)
+		{
+			throw dvl::parser_exception(get_pid(), dvl::parser_exception::lnstruct_invalid_insertion("parser_lambda_routine"));
+		}
+
+		void run(dvl::routine_interface &ri)
+		{
+			f(ri);
 		}
 	};
 };
