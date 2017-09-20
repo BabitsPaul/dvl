@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <set>
 #include <memory>
+#include <iterator>
 
 ////////////////////////////////////////////////////////////////////////////////
 // id
@@ -19,7 +20,8 @@ dvl::pid_table::types = {{TYPE_INTERNAL,			L"TYPE_INTERNAL"},
 					 	 {TYPE_STRUCT,				L"TYPE_STRUCT"},
 					 	 {TYPE_STRING_MATCHER,		L"TYPE_STRING_MATCHER"},
 						 {TYPE_EMPTY,				L"TYPE_EMPTY"},
-						 {TYPE_CHARSET, 			L"TYPE_CHARSET"}};
+						 {TYPE_CHARSET, 			L"TYPE_CHARSET"},
+						 {TYPE_REGEX, 				L"TYPE_REGEX"}};
 
 dvl::pid_table::pid_table()
 {
@@ -182,6 +184,18 @@ dvl::charset_routine::init_matcher(charset_routine &r)
 	for(; def_str < end; def_str++)
 		if(*def_str != L' ' && *def_str != L'\t')
 			break;
+
+	// inversion
+	bool inverted = (*def_str == L'!');
+
+	if(inverted)
+	{
+		def_str++;
+
+		for(; def_str < end; def_str++)
+			if(*def_str != L' ' && *def_str != L'\t')
+				break;
+	}
 
 	// start of charset-definition
 	if(*def_str != L'[')
@@ -377,10 +391,10 @@ dvl::charset_routine::init_matcher(charset_routine &r)
 
 	// function
 	r.matcher = [&, single, cr](wchar_t c)->bool{
-		return single.find(c) != single.end() ||
+		return (single.find(c) != single.end() ||
 				std::find_if(cr.begin(), cr.end(), [c](auto v)->bool{
 					return v.first <= c && c <= v.second;
-				}) != cr.end();
+				}) != cr.end()) ^ inverted;
 	};
 
 	// spaces

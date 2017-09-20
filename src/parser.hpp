@@ -16,6 +16,7 @@
 #include <map>
 #include <stack>
 #include <set>
+#include <boost/regex.hpp>
 
 namespace dvl
 {
@@ -402,6 +403,18 @@ namespace dvl
 	 * @see pid_table.types
 	 */
 					TYPE_CHARSET = 6,
+
+	/**
+	 * type-identifier associated with regex-routines
+	 *
+	 * @see pid
+	 * @see pid_table
+	 * @see regex_routine
+	 * @see pid_table.types
+	 *
+	 * TODO mark for future use (doxygen tag???)
+	 */
+					TYPE_REGEX = 7,
 	/**
 	 * the type-identifier associated with internal ids used for the
 	 * parser itself and diagnostic routines.
@@ -1130,12 +1143,13 @@ namespace dvl
 	 * fixed and arbitrary repetition of said characters.
 	 *
 	 * The syntax of the definition is (backspace denotes semantic operators):
-	 * 					\[<charset>\]<repetition>?
+	 * 					<negator>?\[<charset>\]<repetition>?
 	 * <charset> := 	\(<char-range>\|<char>\)<charset>\?
 	 * <char-range> := 	<char>-<char>
 	 * <char> :=		any character, where brackets and backslashes need to be escaped
 	 * <repetition> :=	{<num-opt>,<num-opt>}|*|?|+
 	 * <num-opt> :=		either no input or a positive integer
+	 * <negator> :=		!
 	 *
 	 * If not specified otherwise via repetition, the charset will default to exactly one
 	 * match. If specified in the defintion the lower bound must always be smaller than the
@@ -1152,6 +1166,9 @@ namespace dvl
 	 * interpreted as equivalent. Special characters must be escaped by a \. This applies to the
 	 * following characters: \, [, ]. Also the standard escape-sequences are valid. The character-set
 	 * must not be empty.
+	 *
+	 * To negate a pattern, it must be preceeded by a !. In this case the routine will match
+	 * any character not contained in the charset
 	 *
 	 * There may be an arbitrarily large number of spaces or tabs before the charset-definition,
 	 * between the charset-definition and the repetition-specification and after the
@@ -1224,6 +1241,9 @@ namespace dvl
 			routine(id),
 			def(def)
 		{
+			if(id.get_type() != TYPE_CHARSET)
+				throw parser_exception(get_pid(), parser_exception::invalid_pid("charset_routine"));
+
 			init_matcher(*this);
 		}
 
@@ -1253,6 +1273,48 @@ namespace dvl
 		 * @see _INFINITY
 		 */
 		const unsigned int &get_max_repetitions(){ return max_repetition; }
+	};
+
+	/////////////////////////////////////////////////////////////////////////////////
+	// regex_routine
+	//
+
+	/**
+	 * Routine that matches the stream starting from the given position against the
+	 * specified regex. The regex must match starting from the current posiion of the
+	 * input-stream in order for the routine to succeed.
+	 *
+	 * @see TYPE_REGEX
+	 */
+	class regex_routine : public routine
+	{
+	private:
+		/**
+		 * The regex associated with this routine
+		 *
+		 * @see get_reg()
+		 */
+		boost::wregex reg;
+	public:
+		/**
+		 * Constructs a new regex_routine for the given regex (@p reg) and
+		 * with the specified pid.
+		 */
+		regex_routine(pid id, std::wstring reg):
+			routine(id),
+			reg(reg)
+		{
+			if(id.get_type() != TYPE_REGEX)
+				throw parser_exception(id, parser_exception::invalid_pid("regex_routine"));
+		}
+
+		/**
+		 * Getter for the regex of this routine
+		 *
+		 * @return the regex of this routine
+		 * @see reg
+		 */
+		const boost::wregex& get_reg(){ return reg; }
 	};
 
 	/////////////////////////////////////////////////////////////////////////////////
@@ -1891,7 +1953,11 @@ namespace dvl
 	struct parser_context
 	{
 	public:
-		parser_context(std::wistream &str, routine_tree_builder &builder, pid_table &pt,
+		// TODO using wistringstream is a temporary fix to allow regex_routine to function
+		// and should be replaced by an appropriate input-stream that allows for bidirectional
+		// iterators as soon as available
+
+		parser_context(std::wistringstream &str, routine_tree_builder &builder, pid_table &pt,
 				parser_routine_factory &factory):
 			str(str), builder(builder), pt(pt), factory(factory)
 		{}
@@ -1899,7 +1965,7 @@ namespace dvl
 		/**
 		 * The input-stream associated with this context
 		 */
-		std::wistream &str;
+		std::wistringstream &str;
 
 		/**
 		 * The routine_tree_builder that was used to generate the syntax-tree
