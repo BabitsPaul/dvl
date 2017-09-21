@@ -1141,8 +1141,9 @@ struct routine_factory_util
 		}
 
 		void run(dvl::routine_interface &ri)
+			throw(dvl::parser_exception)
 		{
-			f(ri);
+			ln = f(ri);
 		}
 	};
 };

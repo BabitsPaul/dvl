@@ -1340,7 +1340,7 @@ namespace dvl
 	class lambda_routine : public routine
 	{
 	public:
-		typedef std::function<void(routine_interface&) throw(parser_exception)> p_func;
+		typedef std::function<lnstruct*(routine_interface&) throw(parser_exception)> p_func;
 	private:
 		p_func f;
 	public:
