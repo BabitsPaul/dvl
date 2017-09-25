@@ -41,7 +41,23 @@ namespace util
 	// object-lifetime-logger
 	//
 
-	// TODO specify stream
+	/**
+	 * A stream-provider to specify the output-stream to which the output
+	 * of a life-time-logger will be sent.
+	 *
+	 * The default_stream_provider will send all output to std::cout. This behavior
+	 * can be overriden by setting an alternative stream.
+	 *
+	 * If different streams should be used for different objects, alternative stream_providers
+	 * can be defined. These need to provide a @c static variable @c str of type
+	 * @c std::ostream
+	 */
+	struct default_stream_provider
+	{
+	public:
+		constexpr static std::ostream &str = std::cout;
+	};
+
 	/**
 	 * Life-time logging.
 	 *
@@ -49,10 +65,10 @@ namespace util
 	 *
 	 * Logging can be enabled by defining LIFE_TIME_TRACE
 	 */
-	template<bool log, typename T>
+	template<typename T, bool log, typename stream_provider = default_stream_provider>
 	class life_time_log
 	{
-	private:
+	protected:
 		life_time_log(){}
 		life_time_log(const life_time_log&){}
 		life_time_log(life_time_log&&){}
@@ -60,28 +76,32 @@ namespace util
 		virtual ~life_time_log(){}
 	};
 
-	template<typename T>
-	class life_time_log<true, T>
+	template<typename T, typename stream_provider>
+	class life_time_log<T, true, stream_provider>
 	{
-	private:
+	protected:
 		life_time_log()
 		{
-			std::cout << "Allocating new instance of " << demangle(typeid(T).name()) << std::endl;
+			std::cout << "Allocating new instance of " << demangle(typeid(T).name())
+					<< " @" << this << std::endl;
 		}
 
 		life_time_log(const life_time_log&)
 		{
-			std::cout << "Allocating new instance of " << demangle(typeid(T).name()) << " copy-ctor" << std::endl;
+			std::cout << "Allocating new instance of " << demangle(typeid(T).name()) << " copy-ctor"
+					<< " @" << this << std::endl;
 		}
 
 		life_time_log(life_time_log&&)
 		{
-			std::cout << "Allocating new instance of " << demangle(typeid(T).name()) << " move-ctor" << std::endl;
+			std::cout << "Allocating new instance of " << demangle(typeid(T).name()) << " move-ctor"
+					<< " @" << this << std::endl;
 		}
 
 		virtual ~life_time_log()
 		{
-			std::cout << "Deallocating instance of " << demangle(typeid(T).name()) << std::endl;
+			std::cout << "Deallocating instance of " << demangle(typeid(T).name())
+					<< " @" << this << std::endl;
 		}
 	};
 
@@ -92,8 +112,8 @@ namespace util
 	#define _LIFE_TIME_TRACE_FLAG false
 #endif //LIFE_TIME_TRACE
 
-	template<typename T>
-	class life_time_log_global : private life_time_log<_LIFE_TIME_TRACE_FLAG, T>{};
+	template<typename T, typename stream_provider = default_stream_provider>
+	class life_time_log_global : private life_time_log<T, _LIFE_TIME_TRACE_FLAG, stream_provider>{};
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	// stack_trace_provider

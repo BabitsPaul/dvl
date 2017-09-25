@@ -33,6 +33,6 @@ util::print_stacktrace(std::ostream &str, unsigned int max_frames, unsigned int 
 
 	str << std::endl;
 
-	delete frames;
-	delete buffer;
+	delete[] frames;
+	delete[] buffer;
 }

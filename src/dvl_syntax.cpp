@@ -43,7 +43,7 @@ syntax::build_syntax_file_definition(dvl::parser_context &c)
 
 						// utility-routines
 						SPACES = {GROUP_SYNTAX_TREE, 200l, TYPE_CHARSET},
-						NEWLINE = {GROUP_SYNTAX_TREE, 201l, TYPE_CHARSET},
+						NEWLINE = {GROUP_SYNTAX_TREE, 201l, TYPE_STRING_MATCHER},
 
 						// comment
 						COMMENT = {GROUP_SYNTAX_TREE, 300l, TYPE_STRUCT},
@@ -60,7 +60,7 @@ syntax::build_syntax_file_definition(dvl::parser_context &c)
 						CHARSET = {GROUP_SYNTAX_TREE, 500l, TYPE_STRUCT},
 						CHARSET_INDICATOR = {GROUP_SYNTAX_TREE, 501l, TYPE_STRING_MATCHER},
 						CHARSET_CONTENT = {GROUP_SYNTAX_TREE, 502l, TYPE_LAMBDA},
-						CHARSET_TERMINATOR = {GROUP_SYNTAX_TREE, 503l, TYPE_LAMBDA},
+						CHARSET_TERMINATOR = {GROUP_SYNTAX_TREE, 503l, TYPE_STRING_MATCHER},
 
 						// name
 						NAME = {GROUP_SYNTAX_TREE, 600l, TYPE_CHARSET},
@@ -69,7 +69,7 @@ syntax::build_syntax_file_definition(dvl::parser_context &c)
 						ATOM = {GROUP_SYNTAX_TREE, 700l, TYPE_FORK},
 
 						// rule
-						RULE = {GROUP_SYNTAX_TREE, 800l, TYPE_CHARSET},
+						RULE = {GROUP_SYNTAX_TREE, 800l, TYPE_STRUCT},
 
 						// concat rule
 						CONCAT_RULE = {GROUP_SYNTAX_TREE, 900l, TYPE_STRUCT},
@@ -86,19 +86,19 @@ syntax::build_syntax_file_definition(dvl::parser_context &c)
 						BRACKET_CONTENT = {GROUP_SYNTAX_TREE, 1101l, TYPE_STRUCT},
 
 						// struct_rule
-						STRUCT_RULE = {GROUP_SYNTAX_TREE, 1200l, TYPE_STRUCT},
+						STRUCT_RULE = {GROUP_SYNTAX_TREE, 1200l, TYPE_FORK},
 
 						// pnum
 						PNUM = {GROUP_SYNTAX_TREE, 1300l, TYPE_CHARSET},
 
 						// repetition_rule
-						REPETITION_RULE = {GROUP_SYNTAX_TREE, 1400l, TYPE_CHARSET},
+						REPETITION_RULE = {GROUP_SYNTAX_TREE, 1400l, TYPE_STRUCT},
 						REPETITION_RANGE = {GROUP_SYNTAX_TREE, 1401l, TYPE_STRUCT},
 						REPETITION_TYPE_SINGLE = {GROUP_SYNTAX_TREE, 1402l, TYPE_STRUCT},
 						REPETITION_TYPE_RANGE = {GROUP_SYNTAX_TREE, 1403l, TYPE_STRUCT},
-						REPETITION_RANGE_LB = {GROUP_SYNTAX_TREE, 1404l, TYPE_STRUCT},
-						REPETITION_RANGE_UB = {GROUP_SYNTAX_TREE, 1405l, TYPE_STRUCT},
-						REPETITION_OPERATOR = {GROUP_SYNTAX_TREE, 1406l, TYPE_CHARSET},
+						REPETITION_RANGE_LB = {GROUP_SYNTAX_TREE, 1404l, TYPE_LOOP},
+						REPETITION_RANGE_UB = {GROUP_SYNTAX_TREE, 1405l, TYPE_LOOP},
+						REPETITION_OPERATOR = {GROUP_SYNTAX_TREE, 1406l, TYPE_FORK},
 
 						// definition
 						DEFINITION = {GROUP_SYNTAX_TREE, 1500l, TYPE_FORK};
@@ -158,7 +158,7 @@ syntax::build_syntax_file_definition(dvl::parser_context &c)
 					ri.get_istream().seekg(-1l, std::ios::cur);
 
 					return ln;
-				}).pop_checkpoint()
+				}).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
 			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
 				.match_string(STRING_TERMINATOR, L")").pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
 			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
@@ -172,7 +172,7 @@ syntax::build_syntax_file_definition(dvl::parser_context &c)
 			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
 				.by_name(SPACES_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
 			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
-				.match_string(CHARSET_INDICATOR, L"$(").pop_checkpoint()
+				.match_string(CHARSET_INDICATOR, L"$(").pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
 			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
 				.lambda(CHARSET_CONTENT, [](routine_interface &ri) throw(parser_exception)->lnstruct*{
 					lnstruct *ln = new lnstruct(CHARSET_CONTENT, ri.get_istream().tellg());
@@ -205,7 +205,7 @@ syntax::build_syntax_file_definition(dvl::parser_context &c)
 					ri.get_istream().seekg(-1l, std::ios::cur);
 
 					return ln;
-				}).pop_checkpoint()
+				}).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
 			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
 				.match_string(CHARSET_TERMINATOR, L")").pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
 			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
@@ -217,14 +217,14 @@ syntax::build_syntax_file_definition(dvl::parser_context &c)
 	b.detach().match_set(NAME, L"[A-Za-z0-9]*").name(NAME_NAME).finalize(NAME_NAME);
 
 	// atom
-	b.detach().fork(ATOM).push_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
-			.by_name(CHARSET_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
+	b.detach().fork(ATOM).name(ATOM_NAME).push_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
+			.by_name(CHARSET_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK).push_checkpoint()
 			.by_name(STRING_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
 			.by_name(NAME_NAME)
 			.finalize(ATOM_NAME);
 
 	// rule predefinition
-	b.detach().fork(RULE).name(RULE_NAME);	// keep unfinalized. This is just a declaration to
+	b.detach().logic(RULE).name(RULE_NAME);	// keep unfinalized. This is just a declaration to
 											// allow composites
 
 	// concat_rule
@@ -269,9 +269,11 @@ syntax::build_syntax_file_definition(dvl::parser_context &c)
 				.match_string(ANONYMOUS_STRING, L")")
 			.finalize(BRACKET_RULE_NAME);
 
+	// TODO unpopped checkpoint in stack!!!
+
 	// struct_rule
 	b.detach().fork(STRUCT_RULE).name(STRUCT_RULE_NAME).push_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
-			.by_name(CONCAT_RULE_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
+			.by_name(CONCAT_RULE_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK).push_checkpoint()
 			.by_name(OPTION_RULE_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
 			.by_name(BRACKET_RULE_NAME)
 			.finalize(STRUCT_RULE_NAME);
@@ -285,21 +287,23 @@ syntax::build_syntax_file_definition(dvl::parser_context &c)
 				.match_string(ANONYMOUS_STRING, L"{").pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
 			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
 				.by_name(SPACES_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
-			.logic(ANONYMOUS_STRING).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
+			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
 				.fork(ANONYMOUS_FORK).push_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
 					.logic(REPETITION_TYPE_SINGLE).set_insertion_mode(ins_mod::AS_CHILD)
 						.by_name(PNUM_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
-					.logic(REPETITION_TYPE_RANGE).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
-						.loop(REPETITION_RANGE_LB, 0, 1).set_insertion_mode(ins_mod::AS_LOOP)
-							.by_name(PNUM_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
-					.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
-						.by_name(SPACES_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
-					.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
-						.match_string(ANONYMOUS_STRING, L",").pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
-					.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
-						.by_name(SPACES_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
-					.logic(REPETITION_RANGE_UB).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
-						.by_name(PNUM_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
+					.logic(REPETITION_TYPE_RANGE).set_insertion_mode(ins_mod::AS_CHILD)
+						.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
+							.loop(REPETITION_RANGE_LB, 0, 1).set_insertion_mode(ins_mod::AS_LOOP)
+								.by_name(PNUM_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
+						.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
+							.by_name(SPACES_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
+						.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
+							.match_string(ANONYMOUS_STRING, L",").pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
+						.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
+							.by_name(SPACES_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
+						.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
+							.loop(REPETITION_RANGE_UB, 0, 1).set_insertion_mode(ins_mod::AS_LOOP)
+								.by_name(PNUM_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
 			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
 				.by_name(SPACES_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
 			.logic(ANONYMOUS_STRUCT).set_insertion_mode(ins_mod::AS_CHILD)
@@ -311,21 +315,21 @@ syntax::build_syntax_file_definition(dvl::parser_context &c)
 			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
 				.by_name(RULE_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
 			.fork(REPETITION_OPERATOR).push_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
-				.match_string(ANONYMOUS_STRING, L"*").pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
-				.match_string(ANONYMOUS_STRING, L"+").pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
+				.match_string(ANONYMOUS_STRING, L"*").pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK).push_checkpoint()
+				.match_string(ANONYMOUS_STRING, L"+").pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK).push_checkpoint()
 				.match_string(ANONYMOUS_STRING, L"?").pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
 				.by_name(REPETITION_RANGE_NAME)
 			.finalize(REPETITION_RULE_NAME);
 
 	// definition
 	b.detach().fork(DEFINITION).name(DEFINITION_NAME).push_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
-			.by_name(REPETITION_RULE_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
+			.by_name(REPETITION_RULE_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK).push_checkpoint()
 			.by_name(STRUCT_RULE_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
 			.by_name(ATOM_NAME)
 			.finalize(DEFINITION_NAME);
 
 	// rule
-	b.detach().logic(RULE).name(RULE_NAME).set_insertion_mode(ins_mod::AS_CHILD)
+	b.detach().by_name(RULE_NAME).set_insertion_mode(ins_mod::AS_CHILD)
 			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
 				.by_name(NAME_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
 			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
@@ -339,7 +343,7 @@ syntax::build_syntax_file_definition(dvl::parser_context &c)
 			.finalize(RULE_NAME);
 
 	// root
-	b.loop(SYNTAX_ROOT, 0, loop_routine::_INFINITY).name(ROOT_NAME).mark_root().set_insertion_mode(ins_mod::AS_LOOP)
+	b.detach().loop(SYNTAX_ROOT, 0, loop_routine::_INFINITY).name(ROOT_NAME).mark_root().set_insertion_mode(ins_mod::AS_LOOP)
 			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
 				.by_name(SPACES_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
 			.logic(ANONYMOUS_STRUCT).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)

@@ -1429,7 +1429,7 @@ namespace dvl
 		 *
 		 * @see routine
 		 */
-		std::vector<routine*> routines;
+		std::set<routine*> routines;
 
 		/**
 		 * Any checkpoints will be stored here to be restored later.
@@ -1489,7 +1489,7 @@ namespace dvl
 		 * @see routine
 		 */
 		~routine_tree_builder(){
-			std::for_each(routines.begin(), routines.end(), [](routine* r){delete r;});
+			std::for_each(routines.begin(), routines.end(), [](routine* r){ delete r; });
 		}
 
 		/**

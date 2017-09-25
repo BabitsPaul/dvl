@@ -216,7 +216,7 @@ dvl::charset_routine::init_matcher(charset_routine &r)
 		if(*def_str == L']' && !escaped)
 		{
 			// found end of definition
-			end_def = def_str - 1;
+			end_def = def_str;	// NOTE: end_def = def_str - 1
 			def_str++;
 			break;
 		}
@@ -241,7 +241,7 @@ dvl::charset_routine::init_matcher(charset_routine &r)
 	const wchar_t *c = start_def;
 
 	escaped = false;
-	while(c <= end_def)
+	while(c < end_def)	// NOTE: while(c <= end_def)
 	{
 		if(*c == L'\\')
 		{
@@ -473,7 +473,7 @@ void
 dvl::routine_tree_builder::insert_node(routine *rn)
 	throw(parser_exception)
 {
-	routines.emplace_back(rn);
+	routines.emplace(rn);
 
 	try{
 		if(r == nullptr)
