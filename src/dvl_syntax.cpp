@@ -13,10 +13,18 @@ dvl::build_syntax_file_defintion(parser_context &c)
 								STRING_NAME = L"string",
 								SPACES_NAME = L"spaces",
 								NEWLINE_NAME = L"newline",
-								CHARSET_NAME = L"charset";
+								CHARSET_NAME = L"charset",
+								NAME_NAME = L"name",
+								PNUM_NAME = L"pnum",
+								STRUCT_RULE_NAME = L"struct_rule",
+								CONCAT_RULE_NAME = L"concat_rule",
+								OPTION_RULE_NAME = L"option_name",
+								BRACKET_RULE_NAME = L"bracket_rule";
 
 	// TODO looping routines must allow alternative routines after completing minimum-number of loops!!!
 	// TODO prevent copying of the routine_tree_builder
+	// TODO allow decoupling of declaration and initialization of routines
+	// TODO prevent self-referencing routines from looping arbitrarily
 
 	static const uint32_t GROUP_SYNTAX_TREE = 2;
 	static const pid SYNTAX_ROOT = {GROUP_SYNTAX_TREE, 0l, TYPE_LOOP},
@@ -42,7 +50,22 @@ dvl::build_syntax_file_defintion(parser_context &c)
 						CHARSET = {GROUP_SYNTAX_TREE, 11l, TYPE_STRUCT},
 						CHARSET_INDICATOR = {GROUP_SYNTAX_TREE, 12l, TYPE_STRING_MATCHER},
 						CHARSET_CONTENT = {GROUP_SYNTAX_TREE, 13l, TYPE_LAMBDA},
-						CHARSET_TERMINATOR = {GROUP_SYNTAX_TREE, 14l, TYPE_LAMBDA};
+						CHARSET_TERMINATOR = {GROUP_SYNTAX_TREE, 14l, TYPE_LAMBDA},
+
+						// name
+						NAME = {GROUP_SYNTAX_TREE, 15l, TYPE_CHARSET},
+
+						// pnum
+						PNUM = {GROUP_SYNTAX_TREE, 16l, TYPE_CHARSET},
+
+						// rule
+						RULE = {GROUP_SYNTAX_TREE, 17l, TYPE_CHARSET},
+
+						// struct-rule
+						STRUCT_RULE = {GROUP_SYNTAX_TREE, 18l, TYPE_CHARSET},
+						CONCAT_RULE = {GROUP_SYNTAX_TREE, 19l, TYPE_CHARSET},
+						OPTION_RULE = {GROUP_SYNTAX_TREE, 20l, TYPE_CHARSET},
+						BRACKET_RULE = {GROUP_SYNTAX_TREE, 21l, TYPE_CHARSET};
 
 	// builds the syntax-rules of the syntax-files used by this parser
 	routine_tree_builder &b = c.builder;
@@ -68,7 +91,7 @@ dvl::build_syntax_file_defintion(parser_context &c)
 			.set_insertion_mode(ins_mod::AS_CHILD)
 			.match_set(COMMENT_CONTENT, L"![\n]*").pop_checkpoint()
 			.set_insertion_mode(ins_mod::AS_NEXT)
-			.match_set(NEWLINE, L"[\n]")	// TODO
+			.by_name(NEWLINE_NAME)
 			.finalize(COMMENT_NAME);
 
 	// string
@@ -167,6 +190,29 @@ dvl::build_syntax_file_defintion(parser_context &c)
 			.by_name(SPACES_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
 			.by_name(NEWLINE_NAME)
 			.finalize(CHARSET_NAME);
+
+	// name
+	b.detach().match_set(NAME, L"[A-Za-z0-9]*").name(NAME_NAME).finalize(NAME_NAME);
+
+	// pnum
+	b.detach().match_set(PNUM, L"[0-9]+").name(PNUM_NAME).finalize(PNUM_NAME);
+
+	// rule predefinition
+	b.detach().fork(RULE).name(RULE_NAME);	// keep unfinalized. This is just a declaration to
+											// allow composites
+
+	// concat_rule
+	b.detach().logic(CONCAT_RULE).name(CONCAT_RULE_NAME).set_insertion_mode(ins_mod::AS_CHILD)
+			.logic(ANONYMOUS).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
+			.by_name(RULE_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
+			.logic(ANONYMOUS).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
+			.match_string(, match)
+	b.detach().fork(STRUCT_RULE).name(STRUCT_RULE_NAME).push_checkpoint().set_insertion_mode(ins_mod::AS_FORK)
+			.logic(CONCAT_RULE).set_insertion_mode(ins_mod::AS_CHILD)
+			.logic(ANONYMOUS).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
+			.by_name(RULE_NAME).pop_checkpoint().set_insertion_mode(ins_mod::AS_NEXT)
+			.logic(ANONYMOUS).push_checkpoint().set_insertion_mode(ins_mod::AS_CHILD)
+
 
 	// rule
 	/*

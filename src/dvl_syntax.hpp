@@ -36,7 +36,8 @@ namespace dvl
 	 * (these operators are equivalent to those used for regex).
 	 *
 	 * Precedence from higher to lower-order: ( ... ) -> repetition -> '.' -> '|'
-	 * operations will be interpreted from left to right.
+	 * operations will be interpreted from left to right. Between operators and definitions spaces may
+	 * be chosen arbitrarily.
 	 *
 	 * @param context the context on which the process will reflect
 	 */
