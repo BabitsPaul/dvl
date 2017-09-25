@@ -3,7 +3,7 @@
 
 #include "parser.hpp"
 
-namespace dvl
+namespace syntax
 {
 	/**
 	 * Sets up the specified parser_context for processing syntax-definition-files.
@@ -36,12 +36,13 @@ namespace dvl
 	 * (these operators are equivalent to those used for regex).
 	 *
 	 * Precedence from higher to lower-order: ( ... ) -> repetition -> '.' -> '|'
-	 * operations will be interpreted from left to right.
+	 * operations will be interpreted from left to right. Between operators and definitions spaces may
+	 * be chosen arbitrarily.
 	 *
 	 * @param context the context on which the process will reflect
 	 */
 	void
-	build_syntax_file_defintion(parser_context &context);
+	build_syntax_file_definition(dvl::parser_context &context);
 }
 
 #endif /* DVL_SYNTAX_HPP_ */

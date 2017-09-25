@@ -1,6 +1,7 @@
 #include "parser.hpp"
 #include "io.hpp"
 #include "test.hpp"
+#include "dvl_syntax.hpp"
 
 #include <iostream>
 #include <vector>
@@ -14,21 +15,22 @@ void setup_params(int, char**)
 
 int main(int argc, char *argv[])
 {
+	using namespace dvl;
+	using namespace syntax;
+
 	setup_params(argc, argv);
 
 	using namespace dvl;
 
-	//init_glob_locale();
+	init_glob_locale();
 
-	//char c[20];
-	//scanf("Please enter some text %s", c);
-	//printf("You entered %s\n", c);
+	std::wistringstream str(L"Hello world");
+	routine_tree_builder b;
+	pid_table pt;
+	parser_routine_factory f;
+	parser_context c(str, b, pt, f);
 
-	setlocale(LC_ALL, "");
-	wchar_t wc[100];
-	printf("please enter a text: ");
-	scanf("%ls", wc);
-	printf("you entered: %ls\n", wc);
+	build_syntax_file_definition(c);
 
 	return 0;
 }
