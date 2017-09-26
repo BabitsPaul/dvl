@@ -33,6 +33,7 @@ syntax::build_syntax_file_definition(dvl::parser_context &c)
 	// TODO prevent self-referencing routines from looping arbitrarily
 	// TODO tree_builder: implement followed-by relation-ship as single operation
 	// TODO inheritance for pids
+	// TODO make constants global for access in reader
 
 	static const uint32_t GROUP_SYNTAX_TREE = 2;
 	static const pid SYNTAX_ROOT = {GROUP_SYNTAX_TREE, 0l, TYPE_LOOP},

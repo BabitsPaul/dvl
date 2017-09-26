@@ -1,7 +1,7 @@
-#ifndef DVL_SYNTAX_HPP_
-#define DVL_SYNTAX_HPP_
+#ifndef SYNTAX_DVL_SYNTAX_HPP_
+#define SYNTAX_DVL_SYNTAX_HPP_
 
-#include "parser.hpp"
+#include "../parser.hpp"
 
 namespace syntax
 {
@@ -43,6 +43,8 @@ namespace syntax
 	 */
 	void
 	build_syntax_file_definition(dvl::parser_context &context);
+
+	// TODO alter to return routine_tree_builder
 }
 
-#endif /* DVL_SYNTAX_HPP_ */
+#endif /* SYNTAX_DVL_SYNTAX_HPP_ */

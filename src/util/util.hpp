@@ -1,5 +1,5 @@
-#ifndef UTIL_HPP_
-#define UTIL_HPP_
+#ifndef UTIL_UTIL_HPP_
+#define UTIL_UTIL_HPP_
 
 #ifndef _STACKTRACE_H_
 #define _STACKTRACE_H_
@@ -155,4 +155,4 @@ namespace util
 #endif // _STACKTRACE_H_
 
 
-#endif /* UTIL_HPP_ */
+#endif /* UTIL_UTIL_HPP_ */

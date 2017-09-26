@@ -1,12 +1,12 @@
 #include "parser.hpp"
-#include "io.hpp"
-#include "test.hpp"
-#include "dvl_syntax.hpp"
-
 #include <iostream>
 #include <vector>
 #include <sstream>
 #include <cwchar>
+
+#include "syntax/dvl_syntax.hpp"
+#include "test/test.hpp"
+#include "util/io.hpp"
 
 void setup_params(int, char**)
 {
