@@ -2,6 +2,93 @@
 
 #include <boost/regex.hpp>
 
+const std::wstring syntax::ROOT_NAME = L"root",
+			syntax::COMMENT_NAME = L"comment",
+			syntax::RULE_NAME = L"rule",
+			syntax::STRING_NAME = L"string",
+			syntax::SPACES_NAME = L"spaces",
+			syntax::NEWLINE_NAME = L"newline",
+			syntax::CHARSET_NAME = L"charset",
+			syntax::NAME_NAME = L"name",
+			syntax::PNUM_NAME = L"pnum",
+			syntax::STRUCT_RULE_NAME = L"struct_rule",
+			syntax::CONCAT_RULE_NAME = L"concat_rule",
+			syntax::OPTION_RULE_NAME = L"option_name",
+			syntax::BRACKET_RULE_NAME = L"bracket_rule",
+			syntax::ATOM_NAME = L"atom",
+			syntax::REPETITION_RULE_NAME = L"repetition_rule",
+			syntax::REPETITION_RANGE_NAME = L"repetition_range",
+			syntax::DEFINITION_NAME = L"definition";
+
+const uint32_t syntax::GROUP_SYNTAX_TREE = 2;
+const dvl::pid syntax::SYNTAX_ROOT = {syntax::GROUP_SYNTAX_TREE, 0l, dvl::TYPE_LOOP},
+						// defines the id for routines that don't require a unique-identifier
+						syntax::ANONYMOUS_STRUCT = {syntax::GROUP_SYNTAX_TREE, 100l, dvl::TYPE_STRUCT},
+						syntax::ANONYMOUS_STRING = {syntax::GROUP_SYNTAX_TREE, 101l, dvl::TYPE_STRING_MATCHER},
+						syntax::ANONYMOUS_FORK = {syntax::GROUP_SYNTAX_TREE, 102l, dvl::TYPE_FORK},
+
+						// utility-routines
+						syntax::SPACES = {syntax::GROUP_SYNTAX_TREE, 200l, dvl::TYPE_CHARSET},
+						syntax::NEWLINE = {syntax::GROUP_SYNTAX_TREE, 201l, dvl::TYPE_STRING_MATCHER},
+
+						// comment
+						syntax::COMMENT = {syntax::GROUP_SYNTAX_TREE, 300l, dvl::TYPE_STRUCT},
+						syntax::COMMENT_INDICATOR = {syntax::GROUP_SYNTAX_TREE, 301l, dvl::TYPE_CHARSET},
+						syntax::COMMENT_CONTENT = {syntax::GROUP_SYNTAX_TREE, 302l, dvl::TYPE_CHARSET},
+
+						// string
+						syntax::STRING = {syntax::GROUP_SYNTAX_TREE, 400l, dvl::TYPE_STRUCT},
+						syntax::STRING_START = {syntax::GROUP_SYNTAX_TREE, 401l, dvl::TYPE_STRING_MATCHER},
+						syntax::STRING_CONTENT = {syntax::GROUP_SYNTAX_TREE, 402l, dvl::TYPE_LAMBDA},
+						syntax::STRING_TERMINATOR = {syntax::GROUP_SYNTAX_TREE, 403l, dvl::TYPE_STRING_MATCHER},
+
+						// charset
+						syntax::CHARSET = {syntax::GROUP_SYNTAX_TREE, 500l, dvl::TYPE_STRUCT},
+						syntax::CHARSET_INDICATOR = {syntax::GROUP_SYNTAX_TREE, 501l, dvl::TYPE_STRING_MATCHER},
+						syntax::CHARSET_CONTENT = {syntax::GROUP_SYNTAX_TREE, 502l, dvl::TYPE_LAMBDA},
+						syntax::CHARSET_TERMINATOR = {syntax::GROUP_SYNTAX_TREE, 503l, dvl::TYPE_STRING_MATCHER},
+
+						// name
+						syntax::NAME = {syntax::GROUP_SYNTAX_TREE, 600l, dvl::TYPE_CHARSET},
+
+						// atom
+						syntax::ATOM = {syntax::GROUP_SYNTAX_TREE, 700l, dvl::TYPE_FORK},
+
+						// rule
+						syntax::RULE = {syntax::GROUP_SYNTAX_TREE, 800l, dvl::TYPE_STRUCT},
+
+						// concat rule
+						syntax::CONCAT_RULE = {syntax::GROUP_SYNTAX_TREE, 900l, dvl::TYPE_STRUCT},
+						syntax::CONCAT_A = {syntax::GROUP_SYNTAX_TREE, 901l, dvl::TYPE_STRUCT},
+						syntax::CONCAT_B = {syntax::GROUP_SYNTAX_TREE, 902l, dvl::TYPE_STRUCT},
+
+						// option_rule
+						syntax::OPTION_RULE = {syntax::GROUP_SYNTAX_TREE, 1000l, dvl::TYPE_STRUCT},
+						syntax::OPTION_A = {syntax::GROUP_SYNTAX_TREE, 1001l, dvl::TYPE_STRUCT},
+						syntax::OPTION_B = {syntax::GROUP_SYNTAX_TREE, 1002l, dvl::TYPE_STRUCT},
+
+						// bracket_rulee
+						syntax::BRACKET_RULE = {syntax::GROUP_SYNTAX_TREE, 1100l, dvl::TYPE_STRUCT},
+						syntax::BRACKET_CONTENT = {syntax::GROUP_SYNTAX_TREE, 1101l, dvl::TYPE_STRUCT},
+
+						// struct_rule
+						syntax::STRUCT_RULE = {syntax::GROUP_SYNTAX_TREE, 1200l, dvl::TYPE_FORK},
+
+						// pnum
+						syntax::PNUM = {syntax::GROUP_SYNTAX_TREE, 1300l, dvl::TYPE_CHARSET},
+
+						// repetition_rule
+						syntax::REPETITION_RULE = {syntax::GROUP_SYNTAX_TREE, 1400l, dvl::TYPE_STRUCT},
+						syntax::REPETITION_RANGE = {syntax::GROUP_SYNTAX_TREE, 1401l, dvl::TYPE_STRUCT},
+						syntax::REPETITION_TYPE_SINGLE = {syntax::GROUP_SYNTAX_TREE, 1402l, dvl::TYPE_STRUCT},
+						syntax::REPETITION_TYPE_RANGE = {syntax::GROUP_SYNTAX_TREE, 1403l, dvl::TYPE_STRUCT},
+						syntax::REPETITION_RANGE_LB = {syntax::GROUP_SYNTAX_TREE, 1404l, dvl::TYPE_LOOP},
+						syntax::REPETITION_RANGE_UB = {syntax::GROUP_SYNTAX_TREE, 1405l, dvl::TYPE_LOOP},
+						syntax::REPETITION_OPERATOR = {syntax::GROUP_SYNTAX_TREE, 1406l, dvl::TYPE_FORK},
+
+						// definition
+						syntax::DEFINITION = {syntax::GROUP_SYNTAX_TREE, 1500l, dvl::TYPE_FORK};
+
 void
 syntax::build_syntax_file_definition(dvl::parser_context &c)
 {
@@ -9,100 +96,11 @@ syntax::build_syntax_file_definition(dvl::parser_context &c)
 
 	typedef routine_tree_builder::insertion_mode ins_mod;
 
-	static const std::wstring ROOT_NAME = L"root",
-								COMMENT_NAME = L"comment",
-								RULE_NAME = L"rule",
-								STRING_NAME = L"string",
-								SPACES_NAME = L"spaces",
-								NEWLINE_NAME = L"newline",
-								CHARSET_NAME = L"charset",
-								NAME_NAME = L"name",
-								PNUM_NAME = L"pnum",
-								STRUCT_RULE_NAME = L"struct_rule",
-								CONCAT_RULE_NAME = L"concat_rule",
-								OPTION_RULE_NAME = L"option_name",
-								BRACKET_RULE_NAME = L"bracket_rule",
-								ATOM_NAME = L"atom",
-								REPETITION_RULE_NAME = L"repetition_rule",
-								REPETITION_RANGE_NAME = L"repetition_range",
-								DEFINITION_NAME = L"definition";
-
 	// TODO looping routines must allow alternative routines after completing minimum-number of loops!!!
-	// TODO prevent copying of the routine_tree_builder
 	// TODO allow decoupling of declaration and initialization of routines
 	// TODO prevent self-referencing routines from looping arbitrarily
 	// TODO tree_builder: implement followed-by relation-ship as single operation
 	// TODO inheritance for pids
-	// TODO make constants global for access in reader
-
-	static const uint32_t GROUP_SYNTAX_TREE = 2;
-	static const pid SYNTAX_ROOT = {GROUP_SYNTAX_TREE, 0l, TYPE_LOOP},
-						// defines the id for routines that don't require a unique-identifier
-						ANONYMOUS_STRUCT = {GROUP_SYNTAX_TREE, 100l, TYPE_STRUCT},
-						ANONYMOUS_STRING = {GROUP_SYNTAX_TREE, 101l, TYPE_STRING_MATCHER},
-						ANONYMOUS_FORK = {GROUP_SYNTAX_TREE, 102l, TYPE_FORK},
-
-						// utility-routines
-						SPACES = {GROUP_SYNTAX_TREE, 200l, TYPE_CHARSET},
-						NEWLINE = {GROUP_SYNTAX_TREE, 201l, TYPE_STRING_MATCHER},
-
-						// comment
-						COMMENT = {GROUP_SYNTAX_TREE, 300l, TYPE_STRUCT},
-						COMMENT_INDICATOR = {GROUP_SYNTAX_TREE, 301l, TYPE_CHARSET},
-						COMMENT_CONTENT = {GROUP_SYNTAX_TREE, 302l, TYPE_CHARSET},
-
-						// string
-						STRING = {GROUP_SYNTAX_TREE, 400l, TYPE_STRUCT},
-						STRING_START = {GROUP_SYNTAX_TREE, 401l, TYPE_STRING_MATCHER},
-						STRING_CONTENT = {GROUP_SYNTAX_TREE, 402l, TYPE_LAMBDA},
-						STRING_TERMINATOR = {GROUP_SYNTAX_TREE, 403l, TYPE_STRING_MATCHER},
-
-						// charset
-						CHARSET = {GROUP_SYNTAX_TREE, 500l, TYPE_STRUCT},
-						CHARSET_INDICATOR = {GROUP_SYNTAX_TREE, 501l, TYPE_STRING_MATCHER},
-						CHARSET_CONTENT = {GROUP_SYNTAX_TREE, 502l, TYPE_LAMBDA},
-						CHARSET_TERMINATOR = {GROUP_SYNTAX_TREE, 503l, TYPE_STRING_MATCHER},
-
-						// name
-						NAME = {GROUP_SYNTAX_TREE, 600l, TYPE_CHARSET},
-
-						// atom
-						ATOM = {GROUP_SYNTAX_TREE, 700l, TYPE_FORK},
-
-						// rule
-						RULE = {GROUP_SYNTAX_TREE, 800l, TYPE_STRUCT},
-
-						// concat rule
-						CONCAT_RULE = {GROUP_SYNTAX_TREE, 900l, TYPE_STRUCT},
-						CONCAT_A = {GROUP_SYNTAX_TREE, 901l, TYPE_STRUCT},
-						CONCAT_B = {GROUP_SYNTAX_TREE, 902l, TYPE_STRUCT},
-
-						// option_rule
-						OPTION_RULE = {GROUP_SYNTAX_TREE, 1000l, TYPE_STRUCT},
-						OPTION_A = {GROUP_SYNTAX_TREE, 1001l, TYPE_STRUCT},
-						OPTION_B = {GROUP_SYNTAX_TREE, 1002l, TYPE_STRUCT},
-
-						// bracket_rulee
-						BRACKET_RULE = {GROUP_SYNTAX_TREE, 1100l, TYPE_STRUCT},
-						BRACKET_CONTENT = {GROUP_SYNTAX_TREE, 1101l, TYPE_STRUCT},
-
-						// struct_rule
-						STRUCT_RULE = {GROUP_SYNTAX_TREE, 1200l, TYPE_FORK},
-
-						// pnum
-						PNUM = {GROUP_SYNTAX_TREE, 1300l, TYPE_CHARSET},
-
-						// repetition_rule
-						REPETITION_RULE = {GROUP_SYNTAX_TREE, 1400l, TYPE_STRUCT},
-						REPETITION_RANGE = {GROUP_SYNTAX_TREE, 1401l, TYPE_STRUCT},
-						REPETITION_TYPE_SINGLE = {GROUP_SYNTAX_TREE, 1402l, TYPE_STRUCT},
-						REPETITION_TYPE_RANGE = {GROUP_SYNTAX_TREE, 1403l, TYPE_STRUCT},
-						REPETITION_RANGE_LB = {GROUP_SYNTAX_TREE, 1404l, TYPE_LOOP},
-						REPETITION_RANGE_UB = {GROUP_SYNTAX_TREE, 1405l, TYPE_LOOP},
-						REPETITION_OPERATOR = {GROUP_SYNTAX_TREE, 1406l, TYPE_FORK},
-
-						// definition
-						DEFINITION = {GROUP_SYNTAX_TREE, 1500l, TYPE_FORK};
 
 	// builds the syntax-rules of the syntax-files used by this parser
 	routine_tree_builder &b = c.builder;

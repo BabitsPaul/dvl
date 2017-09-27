@@ -6,6 +6,96 @@
 namespace syntax
 {
 	/**
+	 * Constant names for special routines
+	 */
+	extern const std::wstring ROOT_NAME,
+								COMMENT_NAME,
+								RULE_NAME,
+								STRING_NAME,
+								SPACES_NAME,
+								NEWLINE_NAME,
+								CHARSET_NAME,
+								NAME_NAME,
+								PNUM_NAME,
+								STRUCT_RULE_NAME,
+								CONCAT_RULE_NAME,
+								OPTION_RULE_NAME,
+								BRACKET_RULE_NAME,
+								ATOM_NAME,
+								REPETITION_RULE_NAME,
+								REPETITION_RANGE_NAME,
+								DEFINITION_NAME;
+
+	extern const uint32_t GROUP_SYNTAX_TREE;
+	extern const dvl::pid SYNTAX_ROOT,
+							// defines the id for routines that don't require a unique-identifier
+							ANONYMOUS_STRUCT,
+							ANONYMOUS_STRING,
+							ANONYMOUS_FORK,
+
+							// utility-routines
+							SPACES,
+							NEWLINE,
+
+							// comment
+							COMMENT,
+							COMMENT_INDICATOR,
+							COMMENT_CONTENT,
+
+							// string
+							STRING,
+							STRING_START,
+							STRING_CONTENT,
+							STRING_TERMINATOR,
+
+							// charset
+							CHARSET,
+							CHARSET_INDICATOR,
+							CHARSET_CONTENT,
+							CHARSET_TERMINATOR,
+
+							// name
+							NAME,
+
+							// atom
+							ATOM,
+
+							// rule
+							RULE,
+
+							// concat rule
+							CONCAT_RULE,
+							CONCAT_A,
+							CONCAT_B,
+
+							// option_rule
+							OPTION_RULE,
+							OPTION_A,
+							OPTION_B,
+
+							// bracket_rulee
+							BRACKET_RULE,
+							BRACKET_CONTENT,
+
+							// struct_rule
+							STRUCT_RULE,
+
+							// pnum
+							PNUM,
+
+							// repetition_rule
+							REPETITION_RULE,
+							REPETITION_RANGE,
+							REPETITION_TYPE_SINGLE,
+							REPETITION_TYPE_RANGE,
+							REPETITION_RANGE_LB,
+							REPETITION_RANGE_UB,
+							REPETITION_OPERATOR,
+
+							// definition
+							DEFINITION;
+
+	/**
 	 * Sets up the specified parser_context for processing syntax-definition-files.
 	 * Note that this method will NOT check whether the context is already initialized
 	 * for another parsing-process. This means that in case of an already initialized
@@ -43,8 +133,6 @@ namespace syntax
 	 */
 	void
 	build_syntax_file_definition(dvl::parser_context &context);
-
-	// TODO alter to return routine_tree_builder
 }
 
 #endif /* SYNTAX_DVL_SYNTAX_HPP_ */

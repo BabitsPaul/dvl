@@ -691,6 +691,10 @@ namespace dvl
 		 */
 		routine_tree_builder(): root(nullptr), r(nullptr){}
 
+		// routine_tree_builder may not be copied
+		routine_tree_builder(routine_tree_builder &) = delete;
+		routine_tree_builder &operator=(routine_tree_builder &) = delete;
+
 		/**
 		 * Destroys the routine_tree_builder. In this process any routine
 		 * allocated by this routine_tree_builder will be destroyed
